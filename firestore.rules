@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/schedules/main {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+      allow get, delete: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(['events'])
+        && request.resource.data.events is list
+        && request.resource.data.events.size() <= 1000;
+    }
+  }
+}

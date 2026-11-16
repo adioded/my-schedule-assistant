@@ -118,6 +118,57 @@
             transform: translateY(0);
         }
 
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .save-status {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background: #fff0da;
+            color: #694b1e;
+            font-size: 0.9em;
+            overflow-wrap: anywhere;
+            max-height: 100px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .save-status[data-state="saved"] {
+            background: #e8f0e5;
+            color: #365439;
+        }
+
+        .save-status[data-state="error"] {
+            background: #f9e1e4;
+            color: #852d40;
+        }
+
+        .account-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .account-actions button {
+            padding: 8px 12px;
+        }
+
+        #pending-events {
+            max-height: 120px;
+            overflow-y: auto;
+            padding-left: 20px;
+            margin-top: 8px;
+        }
+
         .schedule-scroll {
             flex: 1;
             min-height: 0;
@@ -424,6 +475,25 @@
                 padding: 15px;
             }
 
+            .week-header {
+                margin-bottom: 12px;
+                padding-bottom: 10px;
+                gap: 8px;
+            }
+
+            .week-header h2 {
+                font-size: 1.25em;
+            }
+
+            .nav-buttons {
+                gap: 6px;
+            }
+
+            .nav-buttons button {
+                padding: 8px 10px;
+                font-size: 0.85em;
+            }
+
             .schedule-table {
                 min-width: 640px;
             }
@@ -465,6 +535,7 @@
                     </div>
                 </div>
 
+                <p id="save-status" class="save-status" role="status" data-state="pending">Connecting to sign-in service...</p>
                 <div class="schedule-scroll" role="region" aria-label="Weekly schedule" tabindex="0">
                 <table class="schedule-table" aria-label="Sunday to Saturday schedule in half-hour slots">
                     <thead>
@@ -486,6 +557,21 @@
 
             <!-- Sidebar -->
             <div class="sidebar">
+                <section class="sidebar-panel" aria-label="Account and saving">
+                    <p id="account-status" class="schedule-note">Checking sign-in...</p>
+                    <div class="account-actions">
+                        <button id="sign-in" type="button" disabled>Sign in with Google</button>
+                        <button id="sign-out" type="button" hidden>Sign out</button>
+                        <button id="retry-sync" type="button" hidden>Refresh / Retry sync</button>
+                        <button id="import-events" type="button" hidden>Copy browser events to account</button>
+                        <button id="discard-pending" type="button" hidden>Discard unsynced additions</button>
+                    </div>
+                    <p id="auth-status" class="schedule-note" role="status" style="margin-top: 8px;"></p>
+                    <div id="pending-panel" class="schedule-note" hidden>
+                        <p>These additions are backed up on this device, but are not yet saved to the cloud or shown in the calendar:</p>
+                        <ul id="pending-events"></ul>
+                    </div>
+                </section>
                 <div class="sidebar-panel">
                     <div class="form-tabs" role="tablist" aria-label="Add to schedule">
                         <button type="button" id="event-tab" role="tab" aria-selected="true" aria-controls="event-panel">Add Event</button>
@@ -495,7 +581,7 @@
                 <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
                         <label for="event-title">Event Title</label>
-                        <input type="text" id="event-title" placeholder="e.g., Lecture" required>
+                        <input type="text" id="event-title" placeholder="e.g., Lecture" maxlength="200" required>
                     </div>
                     <div class="form-group">
                         <label for="event-date">Date</label>
@@ -513,8 +599,8 @@
                         <input type="checkbox" id="event-repeat">
                         <label for="event-repeat" style="margin: 0;">Repeat Weekly</label>
                     </div>
-                    <button type="submit" style="width: 100%; margin-top: 10px;">Add Event</button>
-                    <p class="schedule-note" style="margin-top: 12px;">Events are saved in this browser only. Each event reserves its half-hour calendar slots.</p>
+                    <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Add Event</button>
+                    <p class="schedule-note" style="margin-top: 12px;">Sign in to sync events across devices. Without sign-in, events stay in this browser. Each event reserves its half-hour slots. Use Refresh to load changes from another device.</p>
                     <p id="event-status" class="schedule-note" role="status" style="margin-top: 12px;"></p>
                 </form>
 
@@ -586,6 +672,42 @@
         const eventStatus = document.getElementById('event-status');
         const eventsKey = 'schedule-assistant-events-v1';
         let savedEvents = [];
+        let pendingEvents = [];
+        let currentUser = null;
+        let cloud = null;
+        let cloudAvailable = false;
+        let busy = true;
+        let storageError = false;
+        let cloudLoaded = false;
+        let session = 0;
+        const saveStatus = document.getElementById('save-status');
+        const authStatus = document.getElementById('auth-status');
+        const submitEvent = eventForm.querySelector('button[type="submit"]');
+
+        function setSaveStatus(state, message) {
+            saveStatus.dataset.state = state;
+            saveStatus.textContent = message;
+        }
+
+        function updateControls() {
+            submitEvent.disabled = busy || storageError;
+            document.getElementById('sign-in').hidden = Boolean(currentUser);
+            document.getElementById('sign-in').disabled = busy || !cloudAvailable;
+            document.getElementById('sign-out').hidden = !currentUser;
+            document.getElementById('sign-out').disabled = busy;
+            document.getElementById('retry-sync').hidden = !currentUser;
+            document.getElementById('retry-sync').disabled = busy || storageError;
+            document.getElementById('import-events').hidden = !currentUser;
+            document.getElementById('import-events').disabled = busy || storageError;
+            document.getElementById('discard-pending').hidden = !pendingEvents.length;
+            document.getElementById('discard-pending').disabled = busy || storageError;
+            document.getElementById('pending-panel').hidden = !pendingEvents.length;
+            document.getElementById('pending-events').replaceChildren(...pendingEvents.map(entry => {
+                const item = document.createElement('li');
+                item.textContent = `${entry.title} (${entry.date}, ${entry.start} - ${entry.end})`;
+                return item;
+            }));
+        }
 
         function toMinutes(time) {
             const [hours, minutes] = time.split(':').map(Number);
@@ -612,19 +734,46 @@
                 && toMinutes(event.end) > toMinutes(event.start);
         }
 
-        try {
-            const stored = localStorage.getItem(eventsKey);
-            if (stored !== null) {
-                const events = JSON.parse(stored);
-                if (!Array.isArray(events) || !events.every(validEvent)) {
-                    throw new Error('Saved events have an invalid format.');
-                }
-                savedEvents = events;
+        function validateEvents(events, requireIds = false) {
+            if (!Array.isArray(events) || events.length > 1000
+                || !events.every(entry => validEvent(entry) && ((!requireIds && entry.id === undefined)
+                    || (typeof entry.id === 'string' && entry.id.length > 0 && entry.id.length <= 100)))) {
+                throw new Error('Saved events have an invalid format or exceed the 1,000-event limit.');
             }
-        } catch (error) {
-            console.error('Unable to load saved events:', error);
-            eventStatus.textContent = 'Could not load saved events. Adding is disabled to protect your data. Check browser storage permissions and reload.';
-            eventForm.querySelector('button[type="submit"]').disabled = true;
+            return events.map(entry => ({ ...entry, id: entry.id || crypto.randomUUID() }));
+        }
+
+        function guestEvents() {
+            const stored = localStorage.getItem(eventsKey);
+            return stored === null ? [] : validateEvents(JSON.parse(stored));
+        }
+
+        function backupEvents(events = savedEvents, pending = pendingEvents) {
+            if (currentUser) {
+                localStorage.setItem(`${eventsKey}:${currentUser.uid}`, JSON.stringify({ events, pending }));
+            } else {
+                localStorage.setItem(eventsKey, JSON.stringify(events));
+            }
+        }
+
+        function loadGuest(message) {
+            currentUser = null;
+            pendingEvents = [];
+            savedEvents = [];
+            storageError = false;
+            cloudLoaded = false;
+            try {
+                savedEvents = guestEvents();
+                setSaveStatus('local', message || 'Browser only - not synced. Sign in to save to the cloud.');
+            } catch (error) {
+                console.error('Unable to load browser events:', error);
+                storageError = true;
+                setSaveStatus('error', 'Could not load browser events. Adding is disabled to protect your data. Check browser storage permissions and reload.');
+            }
+            document.getElementById('account-status').textContent = 'Not signed in. Browser events are separate from account events.';
+            busy = false;
+            updateControls();
+            renderSchedule();
         }
 
         const today = new Date();
@@ -650,6 +799,35 @@
             const key = dateKey(date);
             return event.date === key || (event.repeat && event.date <= key
                 && new Date(`${event.date}T00:00:00`).getDay() === date.getDay());
+        }
+
+        function eventsConflict(first, second) {
+            const sameDay = occursOn(first, new Date(`${second.date}T00:00:00`))
+                || occursOn(second, new Date(`${first.date}T00:00:00`));
+            return sameDay
+                && Math.floor(toMinutes(first.start) / 30) < Math.ceil(toMinutes(second.end) / 30)
+                && Math.ceil(toMinutes(first.end) / 30) > Math.floor(toMinutes(second.start) / 30);
+        }
+
+        function mergeEvents(existing, additions) {
+            const merged = [...existing];
+            for (const entry of additions) {
+                if (merged.some(item => sameEvent(item, entry))) continue;
+                if (merged.some(item => item.id === entry.id)) {
+                    throw new Error('An event changed on another device. Your addition is not synced; discard it and enter it again.');
+                }
+                const conflict = merged.find(item => eventsConflict(item, entry));
+                if (conflict) {
+                    throw new Error(`"${entry.title}" shares a half-hour slot with "${conflict.title}". Your additions are not synced.`);
+                }
+                merged.push(entry);
+            }
+            if (merged.length > 1000) throw new Error('The schedule is limited to 1,000 events. Your additions are not synced.');
+            return merged;
+        }
+
+        function sameEvent(first, second) {
+            return ['title', 'date', 'start', 'end', 'repeat'].every(key => first[key] === second[key]);
         }
 
         const scheduleBody = document.getElementById('schedule-body');
@@ -702,9 +880,11 @@
         }
         renderSchedule();
 
-        eventForm.addEventListener('submit', event => {
+        eventForm.addEventListener('submit', async event => {
             event.preventDefault();
+            if (busy || storageError) return;
             const entry = {
+                id: crypto.randomUUID(),
                 title: document.getElementById('event-title').value.trim(),
                 date: document.getElementById('event-date').value,
                 start: document.getElementById('event-time').value,
@@ -715,33 +895,230 @@
                 eventStatus.textContent = 'Enter a title, a valid date, and an end time later than the start time on the same day.';
                 return;
             }
-            const conflict = savedEvents.find(existing => {
-                const sameDay = occursOn(existing, new Date(`${entry.date}T00:00:00`))
-                    || occursOn(entry, new Date(`${existing.date}T00:00:00`));
-                return sameDay
-                    && Math.floor(toMinutes(entry.start) / 30) < Math.ceil(toMinutes(existing.end) / 30)
-                    && Math.ceil(toMinutes(entry.end) / 30) > Math.floor(toMinutes(existing.start) / 30);
-            });
+            const conflict = [...savedEvents, ...pendingEvents].find(existing => eventsConflict(existing, entry));
             if (conflict) {
                 eventStatus.textContent = `This event shares a half-hour slot with "${conflict.title}". Choose another time.`;
                 return;
             }
+            if (savedEvents.length + pendingEvents.length >= 1000) {
+                eventStatus.textContent = 'The schedule is limited to 1,000 events. This event was not saved.';
+                return;
+            }
+            eventStatus.textContent = '';
+            if (currentUser) {
+                const nextPending = [...pendingEvents, entry];
+                try {
+                    backupEvents(savedEvents, nextPending);
+                } catch (error) {
+                    console.error('Unable to back up event:', error);
+                    setSaveStatus('error', 'Not saved. Browser backup failed; nothing was uploaded. Keep this form open and check browser storage.');
+                    return;
+                }
+                pendingEvents = nextPending;
+                updateControls();
+                await syncPending();
+                if (savedEvents.some(item => item.id === entry.id)) showAddedEvent(entry);
+                return;
+            }
             const nextEvents = [...savedEvents, entry];
+            setSaveStatus('pending', 'Saving in this browser...');
             try {
-                localStorage.setItem(eventsKey, JSON.stringify(nextEvents));
+                backupEvents(nextEvents);
             } catch (error) {
                 console.error('Unable to save event:', error);
-                eventStatus.textContent = 'Event was not saved. Check browser storage permissions or available space and try again.';
+                setSaveStatus('error', 'Not saved. Check browser storage permissions or available space and try again. Your form has been kept.');
                 return;
             }
             savedEvents = nextEvents;
             renderSchedule();
+            setSaveStatus('local', 'Saved on this device only - not synced.');
+            showAddedEvent(entry);
+        });
+
+        function showAddedEvent(entry) {
             const shown = [...document.querySelectorAll('.day-date')].some(label =>
                 occursOn(entry, new Date(`${label.dateTime}T00:00:00`)));
             eventStatus.textContent = shown
-                ? 'Event added and saved in this browser.'
-                : 'Event saved in this browser. Its date is outside the displayed week.';
+                ? 'Event added.'
+                : 'Event saved. Its date is outside the displayed week.';
             if (shown) focusTime(toMinutes(entry.start));
+        }
+
+        function cloudError(error) {
+            const code = error.code || '';
+            if (code.includes('resource-exhausted')) return 'Cloud usage limit reached. Retry after the quota resets.';
+            if (code.includes('permission-denied')) return 'Cloud access denied. Check sign-in and database permissions.';
+            if (code.includes('unavailable') || !navigator.onLine) return 'Cloud is unreachable. Check your connection and retry.';
+            return error.message || 'An unexpected cloud error occurred. Please retry.';
+        }
+
+        async function syncPending() {
+            if (!currentUser || busy || !pendingEvents.length) return;
+            const uid = currentUser.uid;
+            const revision = session;
+            const additions = [...pendingEvents];
+            busy = true;
+            updateControls();
+            setSaveStatus('pending', 'Saving to cloud... A backup is saved on this device.');
+            const waiting = setTimeout(() => {
+                if (session === revision) setSaveStatus('pending', 'Still waiting for cloud confirmation. Backed up on this device, but not confirmed saved to cloud. Keep this page open.');
+            }, 15000);
+            try {
+                if (!navigator.onLine) throw new Error('You are offline.');
+                const confirmed = await cloud.saveEvents(uid, existing => mergeEvents(validateEvents(existing, true), additions));
+                if (session !== revision) return;
+                savedEvents = confirmed;
+                pendingEvents = [];
+                cloudLoaded = true;
+                renderSchedule();
+                try {
+                    backupEvents();
+                    setSaveStatus('saved', 'Saved to cloud. Available when you sign in on another device.');
+                } catch (error) {
+                    console.error('Unable to update browser backup:', error);
+                    setSaveStatus('local', 'Saved to cloud, but the browser backup could not be updated. Check browser storage.');
+                }
+            } catch (error) {
+                console.error('Cloud save failed:', error);
+                if (session === revision) setSaveStatus('error', `Saved on this device only - NOT synced. ${cloudError(error)} Use Retry sync, or discard the unsynced additions to edit them.`);
+            } finally {
+                clearTimeout(waiting);
+                if (session === revision) {
+                    busy = false;
+                    updateControls();
+                }
+            }
+        }
+
+        async function refreshCloud() {
+            if (!currentUser || busy || storageError) return;
+            const uid = currentUser.uid;
+            const revision = session;
+            busy = true;
+            updateControls();
+            setSaveStatus('pending', 'Loading the latest cloud schedule...');
+            try {
+                const events = validateEvents(await cloud.loadEvents(uid), true);
+                if (session !== revision) return;
+                savedEvents = events;
+                pendingEvents = pendingEvents.filter(entry => !events.some(item => sameEvent(item, entry)));
+                cloudLoaded = true;
+                renderSchedule();
+                try {
+                    backupEvents();
+                    setSaveStatus(pendingEvents.length ? 'local' : 'saved', pendingEvents.length
+                        ? 'Cloud schedule loaded. Some additions are saved on this device only - not synced. Use Retry sync.'
+                        : 'Cloud schedule loaded. All displayed events are saved to cloud.');
+                } catch (error) {
+                    console.error('Unable to update browser backup:', error);
+                    setSaveStatus('local', 'Cloud schedule loaded, but the browser backup could not be updated.');
+                }
+            } catch (error) {
+                console.error('Cloud load failed:', error);
+                if (session === revision) setSaveStatus('error', `${cloudError(error)} Showing this account's browser backup only; it may be out of date. Use Refresh / Retry sync.`);
+            } finally {
+                if (session === revision) {
+                    busy = false;
+                    updateControls();
+                }
+            }
+        }
+
+        async function accountChanged(user) {
+            session++;
+            scrollController?.abort();
+            authStatus.textContent = '';
+            eventStatus.textContent = '';
+            eventForm.reset();
+            document.getElementById('event-date').value = dateKey(new Date());
+            if (!user) {
+                loadGuest();
+                return;
+            }
+            currentUser = user;
+            savedEvents = [];
+            pendingEvents = [];
+            storageError = false;
+            cloudLoaded = false;
+            document.getElementById('account-status').textContent = `Signed in as ${user.email || user.displayName || 'Google user'}. Only your account can access its cloud schedule.`;
+            try {
+                const stored = localStorage.getItem(`${eventsKey}:${user.uid}`);
+                if (stored !== null) {
+                    const backup = JSON.parse(stored);
+                    savedEvents = validateEvents(backup.events, true);
+                    pendingEvents = validateEvents(backup.pending, true);
+                }
+            } catch (error) {
+                console.error('Unable to load account backup:', error);
+                storageError = true;
+                setSaveStatus('error', 'Could not load this account\'s browser backup. Adding and syncing are disabled to protect unsynced data. Check browser storage and reload.');
+            }
+            busy = false;
+            renderSchedule();
+            updateControls();
+            if (!storageError) await refreshCloud();
+        }
+
+        document.getElementById('sign-in').addEventListener('click', async () => {
+            authStatus.textContent = 'Complete sign-in in the Google window.';
+            try {
+                await cloud.signIn();
+                authStatus.textContent = 'Signed in with Google.';
+            } catch (error) {
+                console.error('Google sign-in failed:', error);
+                authStatus.textContent = `Sign-in did not complete. ${error.code === 'auth/popup-blocked'
+                    ? 'Allow pop-ups for this site and try again.'
+                    : error.code === 'auth/popup-closed-by-user' ? 'The Google window was closed. You can try again.' : cloudError(error)}`;
+            }
+        });
+
+        document.getElementById('sign-out').addEventListener('click', async () => {
+            if (busy) return;
+            authStatus.textContent = '';
+            try {
+                await cloud.signOut();
+            } catch (error) {
+                console.error('Sign-out failed:', error);
+                authStatus.textContent = `Could not sign out. ${cloudError(error)}`;
+            }
+        });
+
+        document.getElementById('retry-sync').addEventListener('click', () =>
+            pendingEvents.length ? syncPending() : refreshCloud());
+
+        document.getElementById('import-events').addEventListener('click', async () => {
+            if (busy || storageError || !currentUser) return;
+            try {
+                const combined = mergeEvents([...savedEvents, ...pendingEvents], guestEvents());
+                const nextPending = combined.slice(savedEvents.length);
+                if (!nextPending.length) {
+                    authStatus.textContent = 'No new browser events to copy.';
+                    return;
+                }
+                backupEvents(savedEvents, nextPending);
+                pendingEvents = nextPending;
+                updateControls();
+            } catch (error) {
+                console.error('Unable to copy browser events:', error);
+                authStatus.textContent = `Browser events were not copied. ${cloudError(error)} The original browser events are unchanged.`;
+                return;
+            }
+            await syncPending();
+        });
+
+        document.getElementById('discard-pending').addEventListener('click', () => {
+            if (busy || !confirm('Discard additions that have not been confirmed saved to cloud? Browser-only events and confirmed cloud events will not be deleted.')) return;
+            try {
+                backupEvents(savedEvents, []);
+                pendingEvents = [];
+                updateControls();
+                setSaveStatus(cloudLoaded ? 'saved' : 'local', cloudLoaded
+                    ? 'Unsynced additions discarded. Displayed events are saved to cloud.'
+                    : 'Unsynced additions discarded. Showing a browser backup; refresh to confirm the cloud schedule.');
+            } catch (error) {
+                console.error('Unable to discard unsynced additions:', error);
+                setSaveStatus('error', 'Could not update browser storage. Unsynced additions have been kept.');
+            }
         });
 
         let scrollController;
@@ -788,6 +1165,32 @@
             frame = requestAnimationFrame(animate);
         }
         requestAnimationFrame(() => focusTime(today.getHours() * 60 + today.getMinutes()));
+
+        async function initializeCloud() {
+            try {
+                const config = await import('./cloud-config.js');
+                if (!config.cloudEnabled) {
+                    loadGuest('Cloud features are disabled. Browser only - not synced.');
+                    return;
+                }
+                const { createCloud } = await import('./cloud.js');
+                cloud = createCloud();
+                cloudAvailable = true;
+                await cloud.start(accountChanged, error => {
+                    console.error('Authentication state failed:', error);
+                    session++;
+                    cloudAvailable = false;
+                    loadGuest('Sign-in service failed. Browser only - not synced.');
+                    authStatus.textContent = cloudError(error);
+                });
+            } catch (error) {
+                console.error('Cloud initialization failed:', error);
+                cloudAvailable = false;
+                loadGuest('Sign-in service unavailable. Browser only - not synced.');
+                authStatus.textContent = 'Could not connect to Google sign-in. Check your connection and reload. Local events are still available.';
+            }
+        }
+        initializeCloud();
     </script>
 </body>
 </html>
