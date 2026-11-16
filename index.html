@@ -469,14 +469,26 @@
             accent-color: #95475d;
         }
 
-        .task-block {
+        #task-options {
+            list-style: none;
+        }
+
+        #task-options > li {
             border-top: 1px solid #efdadd;
             padding-top: 10px;
             margin-top: 10px;
         }
 
-        .task-block .remove-block {
-            align-self: center;
+        #task-options ul {
+            padding-left: 18px;
+        }
+
+        #task-options button {
+            margin-top: 6px;
+        }
+
+        #task-options summary {
+            cursor: pointer;
         }
 
         label {
@@ -751,16 +763,6 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="task-date">Date / first block</label>
-                            <input type="date" id="task-date" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="task-start">Start Time</label>
-                            <input type="time" id="task-start" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
                             <label for="task-duration">Duration (hours)</label>
                             <input type="number" id="task-duration" min="0.5" step="0.5" placeholder="2" required>
                         </div>
@@ -786,18 +788,13 @@
                     <fieldset id="task-split-options" hidden disabled>
                         <div class="form-group">
                             <label for="task-minimum">Minimum block: <output id="task-minimum-label" for="task-minimum">1 hour</output></label>
-                            <input type="range" id="task-minimum" min="0.5" max="24" step="0.5" value="1">
+                            <input type="range" id="task-minimum" min="0.5" max="1" step="0.5" value="1">
                         </div>
-                        <div class="form-group">
-                            <label for="task-first-duration">First block (hours)</label>
-                            <input type="number" id="task-first-duration" min="1" step="0.5" value="1" required>
-                        </div>
-                        <p class="schedule-note">Choose each block. Block lengths must total the task duration.</p>
-                        <div id="task-blocks"></div>
-                        <button id="add-task-block" type="button" style="margin-top: 10px;">Add another block</button>
                     </fieldset>
-                    <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Add Task</button>
+                    <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Suggest times</button>
+                    <p class="schedule-note" style="margin-top: 8px;">Available hours: 08:00-22:00. Choose an option to save.</p>
                     <p id="task-status" class="schedule-note" role="status" style="margin-top: 12px;"></p>
+                    <ol id="task-options" class="schedule-note" aria-label="Suggested task schedules"></ol>
                 </form>
                 </div>
 
@@ -836,9 +833,8 @@
         const eventStatus = document.getElementById('event-status');
         const taskForm = document.getElementById('task-panel');
         const taskStatus = document.getElementById('task-status');
-        const taskBlocks = document.getElementById('task-blocks');
+        const taskOptions = document.getElementById('task-options');
         const taskSplitOptions = document.getElementById('task-split-options');
-        let taskBlockNumber = 0;
         const eventsKey = 'schedule-assistant-events-v1';
         let savedEvents = [];
         let pendingEvents = [];
@@ -863,6 +859,9 @@
         function updateControls() {
             submitEvent.disabled = busy || storageError;
             submitTask.disabled = busy || storageError;
+            taskOptions.querySelectorAll('button').forEach(button => {
+                button.disabled = busy || storageError;
+            });
             updateTaskSplit();
             document.getElementById('sign-in').hidden = Boolean(currentUser);
             document.getElementById('sign-in').disabled = busy || !cloudAvailable;
@@ -1176,122 +1175,200 @@
 
         function updateTaskSplit() {
             const split = document.getElementById('task-flexible').checked;
+            const duration = Number(document.getElementById('task-duration').value);
+            const validDuration = Number.isSafeInteger(duration * 60) && duration >= 0.5 && duration * 2 % 1 === 0;
+            const slider = document.getElementById('task-minimum');
+            slider.max = validDuration ? String(duration) : '1';
+            slider.value = String(Math.min(Number(slider.value), Number(slider.max)));
             taskSplitOptions.hidden = !split;
-            taskSplitOptions.disabled = !split || busy || storageError;
-            const minimum = Number(document.getElementById('task-minimum').value);
+            taskSplitOptions.disabled = !split || busy || storageError || !validDuration;
+            const minimum = Number(slider.value);
             document.getElementById('task-minimum-label').textContent = `${minimum} ${minimum === 1 ? 'hour' : 'hours'}`;
-            document.getElementById('task-first-duration').min = String(minimum);
-            taskBlocks.querySelectorAll('.task-block-duration').forEach(input => {
-                input.min = String(minimum);
-            });
         }
 
         function resetTaskForm() {
             taskForm.reset();
-            taskBlocks.replaceChildren();
-            taskBlockNumber = 0;
-            document.getElementById('task-date').value = dateKey(new Date());
+            taskOptions.replaceChildren();
             document.getElementById('task-deadline').value = dateKey(new Date());
             updateTaskSplit();
         }
 
-        document.getElementById('task-flexible').addEventListener('change', updateTaskSplit);
-        document.getElementById('task-minimum').addEventListener('input', updateTaskSplit);
-        document.getElementById('add-task-block').addEventListener('click', () => {
-            if (busy || storageError) return;
-            if (taskBlocks.children.length >= 999) {
-                taskStatus.textContent = 'A task can have at most 1,000 blocks.';
-                return;
-            }
-            const number = ++taskBlockNumber;
-            const block = document.createElement('div');
-            block.className = 'task-block';
-            block.innerHTML = `
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="block-date-${number}">Block date</label>
-                        <input id="block-date-${number}" class="task-block-date" type="date" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="block-start-${number}">Start Time</label>
-                        <input id="block-start-${number}" class="task-block-start" type="time" required>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="block-duration-${number}">Hours</label>
-                        <input id="block-duration-${number}" class="task-block-duration" type="number" step="0.5" required>
-                    </div>
-                    <button class="remove-block" type="button">Remove block</button>
-                </div>`;
-            block.querySelector('.task-block-date').value = document.getElementById('task-date').value;
-            block.querySelector('.task-block-duration').value = document.getElementById('task-minimum').value;
-            taskBlocks.append(block);
+        function taskSettingsChanged() {
             updateTaskSplit();
-            block.querySelector('.task-block-start').focus();
-        });
-        taskBlocks.addEventListener('click', event => {
-            if (event.target instanceof Element && event.target.closest('.remove-block')) {
-                event.target.closest('.task-block').remove();
-            }
-        });
+            taskOptions.replaceChildren();
+            taskStatus.textContent = '';
+        }
+        taskForm.addEventListener('input', taskSettingsChanged);
+        taskForm.addEventListener('change', taskSettingsChanged);
 
-        taskForm.addEventListener('submit', async event => {
+        function freeTaskWindows(date, earliest, events) {
+            const occupied = events.filter(entry => occursOn(entry, date))
+                .map(entry => [Math.floor(toMinutes(entry.start) / 30) * 30, Math.ceil(toMinutes(entry.end) / 30) * 30])
+                .sort((first, second) => first[0] - second[0]);
+            const windows = [];
+            let cursor = Math.max(480, earliest);
+            for (const [start, end] of occupied) {
+                if (start > cursor && cursor < 1320) windows.push({ date: dateKey(date), start: cursor, end: Math.min(start, 1320) });
+                cursor = Math.max(cursor, end);
+            }
+            if (cursor < 1320) windows.push({ date: dateKey(date), start: cursor, end: 1320 });
+            return windows;
+        }
+
+        function* availableTaskWindows(now, deadline, minimum, events) {
+            const todayKey = dateKey(now);
+            const lastDay = new Date(`${deadline}T00:00:00`);
+            let blockedDays = 0;
+            for (const date = new Date(now.getFullYear(), now.getMonth(), now.getDate()); date <= lastDay; date.setDate(date.getDate() + 1)) {
+                const earliest = dateKey(date) === todayKey
+                    ? Math.ceil((now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60 + now.getMilliseconds() / 60000) / 30) * 30
+                    : 480;
+                const windows = freeTaskWindows(date, earliest, events).filter(window => window.end - window.start >= minimum);
+                yield* windows;
+                const oneOff = events.some(entry => !entry.repeat && entry.date === dateKey(date));
+                blockedDays = !windows.length && !oneOff && earliest <= 480 ? blockedDays + 1 : 0;
+                // Future one-off events and newly starting repeats cannot free a fully blocked recurring week.
+                if (blockedDays === 7) return;
+            }
+        }
+
+        function suggestTaskSchedules(now, deadline, duration, minimum, split) {
+            const events = [...savedEvents, ...pendingEvents];
+            const maxBlocks = 1000 - events.length;
+            const weeklyBounds = new Map();
+            function longestFrom(key) {
+                const recurring = events.filter(entry => entry.repeat && entry.date <= key);
+                if (!weeklyBounds.has(recurring.length)) {
+                    const first = new Date(`${key}T00:00:00`);
+                    let longest = 0;
+                    for (let day = 0; day < 7; day++) {
+                        const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + day);
+                        for (const window of freeTaskWindows(date, 480, recurring)) {
+                            longest = Math.max(longest, window.end - window.start);
+                        }
+                    }
+                    weeklyBounds.set(recurring.length, longest);
+                }
+                return weeklyBounds.get(recurring.length);
+            }
+            function canFit(remaining, count, longest) {
+                const needed = Math.ceil(remaining / longest);
+                return minimum <= longest && needed <= count && needed * minimum <= remaining;
+            }
+            if (!canFit(duration, maxBlocks, longestFrom(dateKey(now)))) return [];
+            const iterator = availableTaskWindows(now, deadline, minimum, events);
+            const windows = [];
+            let finished = false;
+            function windowAt(index) {
+                while (windows.length <= index && !finished) {
+                    const next = iterator.next();
+                    finished = next.done;
+                    if (!finished) windows.push(next.value);
+                }
+                return windows[index];
+            }
+            const options = [];
+            const seen = new Set();
+            for (let index = 0; options.length < 10; index++) {
+                const first = windowAt(index);
+                if (!first) break;
+                if (!canFit(duration, maxBlocks, longestFrom(first.date))) break;
+                for (let start = first.start; start + minimum <= first.end && options.length < 10; start += 30) {
+                    let remaining = duration;
+                    const blocks = [];
+                    for (let next = index; remaining > 0 && blocks.length < maxBlocks; next++) {
+                        const window = windowAt(next);
+                        if (!window || (!split && next !== index)) break;
+                        const longest = longestFrom(window.date);
+                        if (!canFit(remaining, maxBlocks - blocks.length, longest)) break;
+                        const blockStart = next === index ? start : window.start;
+                        let length = Math.min(window.end - blockStart, remaining);
+                        if (remaining > length && remaining - length < minimum) length -= minimum - (remaining - length);
+                        if (length < minimum || length + (maxBlocks - blocks.length - 1) * longest < remaining) continue;
+                        blocks.push({ date: window.date, start: formatTime(blockStart), end: formatTime(blockStart + length) });
+                        remaining -= length;
+                    }
+                    if (remaining === 0) {
+                        const key = JSON.stringify(blocks);
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            options.push(blocks);
+                        }
+                    }
+                }
+            }
+            return options;
+        }
+
+        taskForm.addEventListener('submit', event => {
             event.preventDefault();
             if (busy || storageError) return;
+            taskOptions.replaceChildren();
+            const now = new Date();
             const title = document.getElementById('task-title').value.trim();
-            const date = document.getElementById('task-date').value;
-            const start = document.getElementById('task-start').value;
             const deadline = document.getElementById('task-deadline').value;
             const totalMinutes = Number(document.getElementById('task-duration').value) * 60;
             const split = document.getElementById('task-flexible').checked;
             const minimum = split ? Number(document.getElementById('task-minimum').value) * 60 : totalMinutes;
-            if (!title || !validDate(date) || !validDate(deadline) || deadline < date
+            const priority = document.getElementById('task-priority').value;
+            if (!title || !validDate(deadline) || deadline < dateKey(now)
                 || !Number.isSafeInteger(totalMinutes) || totalMinutes < 30 || totalMinutes % 30 !== 0) {
-                taskStatus.textContent = 'Enter a title, valid dates with a deadline on or after the task date, and a duration in half-hour steps.';
+                taskStatus.textContent = 'Enter a title, a deadline today or later, and a duration in half-hour steps.';
                 return;
             }
-            const blocks = [{
-                date, start, minutes: split ? Number(document.getElementById('task-first-duration').value) * 60 : totalMinutes
-            }];
-            if (split) {
-                taskBlocks.querySelectorAll('.task-block').forEach(block => {
-                    blocks.push({
-                        date: block.querySelector('.task-block-date').value,
-                        start: block.querySelector('.task-block-start').value,
-                        minutes: Number(block.querySelector('.task-block-duration').value) * 60
+            const options = suggestTaskSchedules(now, deadline, totalMinutes, minimum, split);
+            taskStatus.textContent = options.length
+                ? `${options.length} ${options.length === 1 ? 'option' : 'options'} found. Choose one to add your task.`
+                : 'No available options before the deadline within 08:00-22:00. Extend the deadline, reduce the duration, or allow shorter split blocks.';
+            options.forEach((blocks, index) => {
+                const option = document.createElement('li');
+                const label = block => `${dateFormatter.format(new Date(`${block.date}T00:00:00`))}, ${block.start} - ${block.end}`;
+                const times = document.createElement(blocks.length > 1 ? 'details' : 'p');
+                if (blocks.length > 1) {
+                    const summary = document.createElement('summary');
+                    summary.textContent = `${blocks.length} blocks, starting ${label(blocks[0])}`;
+                    const list = document.createElement('ul');
+                    blocks.forEach(block => {
+                        const item = document.createElement('li');
+                        item.textContent = label(block);
+                        list.append(item);
                     });
+                    times.append(summary, list);
+                } else {
+                    times.textContent = label(blocks[0]);
+                }
+                const choose = document.createElement('button');
+                choose.type = 'button';
+                choose.textContent = `Add option ${index + 1}`;
+                choose.addEventListener('click', async () => {
+                    if (busy || storageError) return;
+                    if (new Date(`${blocks[0].date}T${blocks[0].start}`) < new Date()) {
+                        taskOptions.replaceChildren();
+                        taskStatus.textContent = 'These times have passed. Suggest times again for fresh options.';
+                        return;
+                    }
+                    const revision = session;
+                    const taskId = crypto.randomUUID();
+                    const entries = blocks.map(block => ({
+                        ...block, id: crypto.randomUUID(), type: 'task', taskId, title, repeat: false,
+                        deadline, priority, minBlockMinutes: minimum
+                    }));
+                    const added = await saveEntries(entries, taskStatus);
+                    if (session !== revision) return;
+                    if (added) {
+                        taskOptions.replaceChildren();
+                        const shown = entries.find(entry => [...document.querySelectorAll('.day-date')].some(label =>
+                            occursOn(entry, new Date(`${label.dateTime}T00:00:00`))));
+                        taskStatus.textContent = `Task added${entries.length > 1 ? ` in ${entries.length} blocks` : ''}.${shown ? '' : ' Its dates are outside the displayed week.'}`;
+                        if (shown) focusTime(toMinutes(shown.start));
+                    } else if (pendingEvents.some(entry => entry.taskId === taskId)) {
+                        taskOptions.replaceChildren();
+                        taskStatus.textContent = 'Task backed up on this device, but not confirmed saved to cloud. Use Retry sync.';
+                    }
                 });
-            }
-            const taskId = crypto.randomUUID();
-            const entries = [];
-            for (const block of blocks) {
-                const end = toMinutes(block.start) + block.minutes;
-                if (!Number.isInteger(block.minutes) || block.minutes < minimum || block.minutes % 30 !== 0 || end > 1440) {
-                    taskStatus.textContent = 'Each block must meet the minimum length, use half-hour duration steps, and finish by midnight.';
-                    return;
-                }
-                const entry = {
-                    id: crypto.randomUUID(), type: 'task', taskId, title, date: block.date, start: block.start,
-                    end: formatTime(end), repeat: false, deadline,
-                    priority: document.getElementById('task-priority').value, minBlockMinutes: minimum
-                };
-                if (!validEvent(entry) || `${entry.date}T${entry.start}` < `${date}T${start}`) {
-                    taskStatus.textContent = 'Choose a valid date and start time for every block, on or after the first start and no later than the deadline.';
-                    return;
-                }
-                entries.push(entry);
-            }
-            if (blocks.reduce((sum, block) => sum + block.minutes, 0) !== totalMinutes) {
-                taskStatus.textContent = 'Block lengths must add up to the total task duration. No blocks were saved.';
-                return;
-            }
-            if (await saveEntries(entries, taskStatus)) {
-                const shown = entries.find(entry => [...document.querySelectorAll('.day-date')].some(label =>
-                    occursOn(entry, new Date(`${label.dateTime}T00:00:00`))));
-                taskStatus.textContent = `Task added${entries.length > 1 ? ` in ${entries.length} blocks` : ''}.${shown ? '' : ' Its dates are outside the displayed week.'}`;
-                if (shown) focusTime(toMinutes(shown.start));
-            }
+                option.append(times, choose);
+                taskOptions.append(option);
+            });
         });
 
         function showAddedEvent(entry) {
