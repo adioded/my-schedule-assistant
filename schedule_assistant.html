@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Schedule Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #fff8f2 0%, #f7e4e6 100%);
+            color: #49363e;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #b85e70 0%, #95475d 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            color: white;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .schedule-section {
+            min-width: 0;
+            background: #fffcf9;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .week-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #efdadd;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .week-header h2 {
+            font-size: 1.8em;
+            color: #783e53;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #b85e70 0%, #95475d 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(149, 71, 93, 0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(149, 71, 93, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .schedule-scroll {
+            max-height: 720px;
+            overflow: auto;
+            margin-top: 12px;
+        }
+
+        .schedule-scroll:focus-visible {
+            outline: 2px solid #783e53;
+            outline-offset: 4px;
+        }
+
+        .schedule-note {
+            color: #735e67;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .schedule-table {
+            width: 100%;
+            min-width: 950px;
+            table-layout: fixed;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .schedule-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: linear-gradient(135deg, #f9e9e9 0%, #efd8de 100%);
+            color: #783e53;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #b85e70;
+        }
+
+        .day-date {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.85em;
+            font-weight: 400;
+        }
+
+        .schedule-table tbody tr {
+            height: 48px;
+        }
+
+        .schedule-table td,
+        .schedule-table tbody th {
+            padding: 4px;
+            border-bottom: 1px solid #efdadd;
+            border-right: 1px solid #efdadd;
+            vertical-align: top;
+        }
+
+        .schedule-table .time-column {
+            width: 125px;
+            left: 0;
+            z-index: 3;
+        }
+
+        .schedule-table tbody th {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background: #fff8f5;
+            padding: 12px 6px;
+            white-space: nowrap;
+            text-align: left;
+        }
+
+        .schedule-table td:empty {
+            background: #fff8f5;
+        }
+
+        .schedule-table td[rowspan] {
+            padding: 4px;
+            background: #fff6f2;
+        }
+
+        .time-slot {
+            background: #fffcf9;
+            border-left: 4px solid #b85e70;
+            padding: 8px;
+            border-radius: 6px;
+            min-height: 100%;
+            overflow-wrap: anywhere;
+            transition: all 0.3s ease;
+        }
+
+        .time-slot:hover {
+            background: #fceef0;
+            border-left-color: #95475d;
+        }
+
+        .time-slot.event {
+            border-left-color: #b85e70;
+            background: #f7e2e8;
+        }
+
+        .time-slot.task {
+            border-left-color: #cb7059;
+            background: #fce5dc;
+        }
+
+        .time-slot.empty {
+            border-left-color: #dfc5cc;
+            background: #fff8f5;
+        }
+
+        .time-label {
+            font-weight: 600;
+            color: #783e53;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .slot-title {
+            font-weight: 600;
+            color: #49363e;
+            margin-bottom: 3px;
+        }
+
+        .slot-description {
+            font-size: 0.85em;
+            color: #735e67;
+        }
+
+        .slot-time {
+            display: block;
+            font-size: 0.8em;
+            color: #783e53;
+            margin-bottom: 6px;
+        }
+
+        .slot-suggestion {
+            font-size: 0.8em;
+            color: #95475d;
+            font-style: italic;
+            margin-top: 5px;
+        }
+
+        .sidebar-panel {
+            background: #fffcf9;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .form-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 5px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            background: #f9e9e9;
+        }
+
+        .form-tabs button {
+            flex: 1;
+            padding: 10px 6px;
+            background: transparent;
+            color: #783e53;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .form-tabs button[aria-selected="true"] {
+            background: #95475d;
+            color: white;
+        }
+
+        .form-tabs button:focus-visible {
+            outline: 2px solid #783e53;
+            outline-offset: 2px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            color: #783e53;
+            margin-bottom: 6px;
+            font-size: 0.95em;
+        }
+
+        input[type="text"],
+        input[type="time"],
+        input[type="date"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #efdadd;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #b85e70;
+            background: #fceef0;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #b85e70;
+        }
+
+        .event-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .event-item {
+            background: #fceef0;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 3px solid #b85e70;
+            font-size: 0.9em;
+        }
+
+        .event-item small {
+            display: block;
+            color: #735e67;
+            margin-top: 3px;
+        }
+
+        .suggestion-box {
+            background: linear-gradient(135deg, #fce5dc 0%, #f9e9e9 100%);
+            border-left: 4px solid #cb7059;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .suggestion-box strong {
+            color: #783e53;
+        }
+
+        .suggestion-box p {
+            margin: 5px 0;
+            color: #735e67;
+        }
+
+        @media (max-width: 768px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .schedule-table td,
+            .schedule-table th {
+                padding: 10px 5px;
+                font-size: 0.9em;
+            }
+        }
+
+        .footer {
+            text-align: center;
+            color: #735e67;
+            font-size: 0.9em;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📅 My Schedule Assistant</h1>
+        </header>
+
+        <div class="content-wrapper">
+            <!-- Main Schedule Section -->
+            <div class="schedule-section">
+                <div class="week-header">
+                    <h2>Current Week Schedule</h2>
+                    <div class="nav-buttons">
+                        <button>← Previous</button>
+                        <button>Today</button>
+                        <button>Next →</button>
+                    </div>
+                </div>
+
+                <div class="schedule-scroll" role="region" aria-label="Weekly schedule" tabindex="0">
+                <table class="schedule-table" aria-label="Sunday to Saturday schedule in half-hour slots">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="time-column">Start – End</th>
+                            <th scope="col">Sunday</th>
+                            <th scope="col">Monday</th>
+                            <th scope="col">Tuesday</th>
+                            <th scope="col">Wednesday</th>
+                            <th scope="col">Thursday</th>
+                            <th scope="col">Friday</th>
+                            <th scope="col">Saturday</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schedule-body"></tbody>
+                </table>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-panel">
+                    <div class="form-tabs" role="tablist" aria-label="Add to schedule">
+                        <button type="button" id="event-tab" role="tab" aria-selected="true" aria-controls="event-panel">Add Event</button>
+                        <button type="button" id="task-tab" role="tab" aria-selected="false" aria-controls="task-panel" tabindex="-1">Add Task</button>
+                    </div>
+                <!-- Add Event Panel -->
+                <div id="event-panel" role="tabpanel" aria-labelledby="event-tab">
+                    <div class="form-group">
+                        <label for="event-title">Event Title</label>
+                        <input type="text" id="event-title" placeholder="e.g., Lecture">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-date">Date</label>
+                        <input type="date" id="event-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-time">Start Time</label>
+                        <input type="time" id="event-time">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-end">End Time</label>
+                        <input type="time" id="event-end">
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="event-repeat">
+                        <label for="event-repeat" style="margin: 0;">Repeat Weekly</label>
+                    </div>
+                    <button style="width: 100%; margin-top: 10px;">Add Event</button>
+                </div>
+
+                <!-- Add Task Panel -->
+                <div id="task-panel" role="tabpanel" aria-labelledby="task-tab" hidden>
+                    <div class="form-group">
+                        <label for="task-title">Task Title</label>
+                        <input type="text" id="task-title" placeholder="e.g., Complete report">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-deadline">Deadline</label>
+                        <input type="date" id="task-deadline">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-duration">Est. Duration (hours)</label>
+                        <input type="text" id="task-duration" placeholder="2">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-priority">Priority</label>
+                        <select id="task-priority">
+                            <option>Low</option>
+                            <option selected>Medium</option>
+                            <option>High</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="task-flexible">
+                        <label for="task-flexible" style="margin: 0;">Flexible Time</label>
+                    </div>
+                    <button style="width: 100%; margin-top: 10px;">Add Task</button>
+                </div>
+                </div>
+
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>© 2024 My Schedule Assistant | Helping you manage your time wisely</p>
+        </footer>
+    </div>
+    <script>
+        const formTabs = [...document.querySelectorAll('.form-tabs [role="tab"]')];
+
+        function activateTab(activeTab) {
+            formTabs.forEach(tab => {
+                const selected = tab === activeTab;
+                tab.setAttribute('aria-selected', String(selected));
+                tab.tabIndex = selected ? 0 : -1;
+                document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
+            });
+        }
+
+        formTabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => activateTab(tab));
+            tab.addEventListener('keydown', event => {
+                let nextIndex;
+                if (event.key === 'ArrowRight') nextIndex = (index + 1) % formTabs.length;
+                else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + formTabs.length) % formTabs.length;
+                else if (event.key === 'Home') nextIndex = 0;
+                else if (event.key === 'End') nextIndex = formTabs.length - 1;
+                else return;
+                event.preventDefault();
+                activateTab(formTabs[nextIndex]);
+                formTabs[nextIndex].focus();
+            });
+        });
+
+        const scheduledItems = [];
+
+        function toMinutes(time) {
+            const [hours, minutes] = time.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        function formatTime(minutes) {
+            return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+        }
+
+        const today = new Date();
+        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+        const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+            day: 'numeric', month: 'short', year: 'numeric'
+        });
+        document.querySelectorAll('.schedule-table thead th:not(.time-column)').forEach((header, day) => {
+            const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
+            const dateLabel = document.createElement('time');
+            dateLabel.className = 'day-date';
+            dateLabel.dateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            dateLabel.textContent = dateFormatter.format(date);
+            header.append(dateLabel);
+        });
+
+        const scheduleBody = document.getElementById('schedule-body');
+        for (let start = 0; start < 1440; start += 30) {
+            const row = document.createElement('tr');
+            const label = document.createElement('th');
+            label.scope = 'row';
+            label.className = 'time-label';
+            label.textContent = `${formatTime(start)} – ${formatTime(Math.min(start + 30, 1439))}`;
+            row.append(label);
+
+            for (let day = 0; day < 7; day++) {
+                const item = scheduledItems.find(entry =>
+                    entry.day === day && toMinutes(entry.start) < start + 30 && toMinutes(entry.end) > start
+                );
+                // A spanning cell already occupies the following rows for this day.
+                if (item && toMinutes(item.start) < start) continue;
+
+                const cell = document.createElement('td');
+                if (item) {
+                    cell.rowSpan = Math.ceil(toMinutes(item.end) / 30) - Math.floor(toMinutes(item.start) / 30);
+                    const block = document.createElement('div');
+                    block.className = `time-slot ${item.type}`;
+                    const time = document.createElement('span');
+                    time.className = 'slot-time';
+                    time.textContent = `${item.start} – ${item.end}`;
+                    const title = document.createElement('div');
+                    title.className = 'slot-title';
+                    title.textContent = item.title;
+                    const description = document.createElement('div');
+                    description.className = 'slot-description';
+                    description.textContent = item.description;
+                    block.append(time, title, description);
+                    cell.append(block);
+                }
+                row.append(cell);
+            }
+            scheduleBody.append(row);
+        }
+
+        requestAnimationFrame(() => {
+            const scroll = document.querySelector('.schedule-scroll');
+            const currentSlot = Math.floor((today.getHours() * 60 + today.getMinutes()) / 30);
+            const row = scheduleBody.rows[currentSlot];
+            const headerHeight = document.querySelector('.schedule-table thead').getBoundingClientRect().height;
+            const rowTop = row.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
+            scroll.scrollTop = rowTop - headerHeight - (scroll.clientHeight - headerHeight - row.getBoundingClientRect().height) / 2;
+        });
+    </script>
+</body>
+</html>
