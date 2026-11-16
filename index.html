@@ -492,29 +492,31 @@
                         <button type="button" id="task-tab" role="tab" aria-selected="false" aria-controls="task-panel" tabindex="-1">Add Task</button>
                     </div>
                 <!-- Add Event Panel -->
-                <div id="event-panel" role="tabpanel" aria-labelledby="event-tab">
+                <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
                         <label for="event-title">Event Title</label>
-                        <input type="text" id="event-title" placeholder="e.g., Lecture">
+                        <input type="text" id="event-title" placeholder="e.g., Lecture" required>
                     </div>
                     <div class="form-group">
                         <label for="event-date">Date</label>
-                        <input type="date" id="event-date">
+                        <input type="date" id="event-date" required>
                     </div>
                     <div class="form-group">
                         <label for="event-time">Start Time</label>
-                        <input type="time" id="event-time">
+                        <input type="time" id="event-time" required>
                     </div>
                     <div class="form-group">
                         <label for="event-end">End Time</label>
-                        <input type="time" id="event-end">
+                        <input type="time" id="event-end" required>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="event-repeat">
                         <label for="event-repeat" style="margin: 0;">Repeat Weekly</label>
                     </div>
-                    <button style="width: 100%; margin-top: 10px;">Add Event</button>
-                </div>
+                    <button type="submit" style="width: 100%; margin-top: 10px;">Add Event</button>
+                    <p class="schedule-note" style="margin-top: 12px;">Events are saved in this browser only. Each event reserves its half-hour calendar slots.</p>
+                    <p id="event-status" class="schedule-note" role="status" style="margin-top: 12px;"></p>
+                </form>
 
                 <!-- Add Task Panel -->
                 <div id="task-panel" role="tabpanel" aria-labelledby="task-tab" hidden>
@@ -580,7 +582,10 @@
             });
         });
 
-        const scheduledItems = [];
+        const eventForm = document.getElementById('event-panel');
+        const eventStatus = document.getElementById('event-status');
+        const eventsKey = 'schedule-assistant-events-v1';
+        let savedEvents = [];
 
         function toMinutes(time) {
             const [hours, minutes] = time.split(':').map(Number);
@@ -591,8 +596,40 @@
             return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
         }
 
+        function dateKey(date) {
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function validEvent(event) {
+            if (!event || typeof event.title !== 'string' || !event.title.trim()
+                || typeof event.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(event.date)
+                || typeof event.repeat !== 'boolean') return false;
+            const date = new Date(`${event.date}T00:00:00`);
+            const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+            return !Number.isNaN(date.getTime()) && dateKey(date) === event.date
+                && typeof event.start === 'string' && timePattern.test(event.start)
+                && typeof event.end === 'string' && timePattern.test(event.end)
+                && toMinutes(event.end) > toMinutes(event.start);
+        }
+
+        try {
+            const stored = localStorage.getItem(eventsKey);
+            if (stored !== null) {
+                const events = JSON.parse(stored);
+                if (!Array.isArray(events) || !events.every(validEvent)) {
+                    throw new Error('Saved events have an invalid format.');
+                }
+                savedEvents = events;
+            }
+        } catch (error) {
+            console.error('Unable to load saved events:', error);
+            eventStatus.textContent = 'Could not load saved events. Adding is disabled to protect your data. Check browser storage permissions and reload.';
+            eventForm.querySelector('button[type="submit"]').disabled = true;
+        }
+
         const today = new Date();
         const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+        document.getElementById('event-date').value = dateKey(today);
         const dateFormatter = new Intl.DateTimeFormat('en-GB', {
             day: 'numeric', month: 'short', year: 'numeric'
         });
@@ -600,7 +637,7 @@
             const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
             const dateLabel = document.createElement('time');
             dateLabel.className = 'day-date';
-            dateLabel.dateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            dateLabel.dateTime = dateKey(date);
             dateLabel.textContent = dateFormatter.format(date);
             header.append(dateLabel);
             if (day === today.getDay()) {
@@ -609,48 +646,109 @@
             }
         });
 
-        const scheduleBody = document.getElementById('schedule-body');
-        for (let start = 0; start < 1440; start += 30) {
-            const row = document.createElement('tr');
-            const label = document.createElement('th');
-            label.scope = 'row';
-            label.className = 'time-label';
-            label.textContent = `${formatTime(start)} – ${formatTime(Math.min(start + 30, 1439))}`;
-            row.append(label);
-
-            for (let day = 0; day < 7; day++) {
-                const item = scheduledItems.find(entry =>
-                    entry.day === day && toMinutes(entry.start) < start + 30 && toMinutes(entry.end) > start
-                );
-                // A spanning cell already occupies the following rows for this day.
-                if (item && toMinutes(item.start) < start) continue;
-
-                const cell = document.createElement('td');
-                if (day === today.getDay()) cell.classList.add('current-day');
-                if (item) {
-                    cell.rowSpan = Math.ceil(toMinutes(item.end) / 30) - Math.floor(toMinutes(item.start) / 30);
-                    const block = document.createElement('div');
-                    block.className = `time-slot ${item.type}`;
-                    const time = document.createElement('span');
-                    time.className = 'slot-time';
-                    time.textContent = `${item.start} – ${item.end}`;
-                    const title = document.createElement('div');
-                    title.className = 'slot-title';
-                    title.textContent = item.title;
-                    const description = document.createElement('div');
-                    description.className = 'slot-description';
-                    description.textContent = item.description;
-                    block.append(time, title, description);
-                    cell.append(block);
-                }
-                row.append(cell);
-            }
-            scheduleBody.append(row);
+        function occursOn(event, date) {
+            const key = dateKey(date);
+            return event.date === key || (event.repeat && event.date <= key
+                && new Date(`${event.date}T00:00:00`).getDay() === date.getDay());
         }
 
-        requestAnimationFrame(() => {
+        const scheduleBody = document.getElementById('schedule-body');
+        function renderSchedule() {
+            const scheduledItems = [];
+            for (let day = 0; day < 7; day++) {
+                const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
+                savedEvents.filter(event => occursOn(event, date)).forEach(event => {
+                    scheduledItems.push({ ...event, day, type: 'event', description: event.repeat ? 'Repeats weekly' : '' });
+                });
+            }
+            scheduleBody.replaceChildren();
+            for (let start = 0; start < 1440; start += 30) {
+                const row = document.createElement('tr');
+                const label = document.createElement('th');
+                label.scope = 'row';
+                label.className = 'time-label';
+                label.textContent = `${formatTime(start)} – ${formatTime(Math.min(start + 30, 1439))}`;
+                row.append(label);
+
+                for (let day = 0; day < 7; day++) {
+                    const item = scheduledItems.find(entry =>
+                        entry.day === day && toMinutes(entry.start) < start + 30 && toMinutes(entry.end) > start
+                    );
+                    // A spanning cell already occupies the following rows for this day.
+                    if (item && toMinutes(item.start) < start) continue;
+
+                    const cell = document.createElement('td');
+                    if (day === today.getDay()) cell.classList.add('current-day');
+                    if (item) {
+                        cell.rowSpan = Math.ceil(toMinutes(item.end) / 30) - Math.floor(toMinutes(item.start) / 30);
+                        const block = document.createElement('div');
+                        block.className = `time-slot ${item.type}`;
+                        const time = document.createElement('span');
+                        time.className = 'slot-time';
+                        time.textContent = `${item.start} – ${item.end}`;
+                        const title = document.createElement('div');
+                        title.className = 'slot-title';
+                        title.textContent = item.title;
+                        const description = document.createElement('div');
+                        description.className = 'slot-description';
+                        description.textContent = item.description;
+                        block.append(time, title, description);
+                        cell.append(block);
+                    }
+                    row.append(cell);
+                }
+                scheduleBody.append(row);
+            }
+        }
+        renderSchedule();
+
+        eventForm.addEventListener('submit', event => {
+            event.preventDefault();
+            const entry = {
+                title: document.getElementById('event-title').value.trim(),
+                date: document.getElementById('event-date').value,
+                start: document.getElementById('event-time').value,
+                end: document.getElementById('event-end').value,
+                repeat: document.getElementById('event-repeat').checked
+            };
+            if (!validEvent(entry)) {
+                eventStatus.textContent = 'Enter a title, a valid date, and an end time later than the start time on the same day.';
+                return;
+            }
+            const conflict = savedEvents.find(existing => {
+                const sameDay = occursOn(existing, new Date(`${entry.date}T00:00:00`))
+                    || occursOn(entry, new Date(`${existing.date}T00:00:00`));
+                return sameDay
+                    && Math.floor(toMinutes(entry.start) / 30) < Math.ceil(toMinutes(existing.end) / 30)
+                    && Math.ceil(toMinutes(entry.end) / 30) > Math.floor(toMinutes(existing.start) / 30);
+            });
+            if (conflict) {
+                eventStatus.textContent = `This event shares a half-hour slot with "${conflict.title}". Choose another time.`;
+                return;
+            }
+            const nextEvents = [...savedEvents, entry];
+            try {
+                localStorage.setItem(eventsKey, JSON.stringify(nextEvents));
+            } catch (error) {
+                console.error('Unable to save event:', error);
+                eventStatus.textContent = 'Event was not saved. Check browser storage permissions or available space and try again.';
+                return;
+            }
+            savedEvents = nextEvents;
+            renderSchedule();
+            const shown = [...document.querySelectorAll('.day-date')].some(label =>
+                occursOn(entry, new Date(`${label.dateTime}T00:00:00`)));
+            eventStatus.textContent = shown
+                ? 'Event added and saved in this browser.'
+                : 'Event saved in this browser. Its date is outside the displayed week.';
+            if (shown) focusTime(toMinutes(entry.start));
+        });
+
+        let scrollController;
+        function focusTime(minutes) {
+            scrollController?.abort();
             const scroll = document.querySelector('.schedule-scroll');
-            const currentSlot = Math.floor((today.getHours() * 60 + today.getMinutes()) / 30);
+            const currentSlot = Math.floor(minutes / 30);
             const row = scheduleBody.rows[currentSlot];
             const headerHeight = document.querySelector('.schedule-table thead').getBoundingClientRect().height;
             const rowTop = row.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
@@ -667,6 +765,7 @@
             const duration = 1800;
             const startedAt = performance.now();
             const controller = new AbortController();
+            scrollController = controller;
             let frame;
             // Let manual scrolling take over immediately.
             ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(type => {
@@ -687,7 +786,8 @@
             }
 
             frame = requestAnimationFrame(animate);
-        });
+        }
+        requestAnimationFrame(() => focusTime(today.getHours() * 60 + today.getMinutes()));
     </script>
 </body>
 </html>
