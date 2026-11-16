@@ -334,9 +334,10 @@
         }
 
         .schedule-table td.time-slot {
+            position: relative;
             background: #fffcf9;
             border-left: 4px solid #b85e70;
-            padding: 8px;
+            padding: 8px 28px 8px 8px;
             border-radius: 6px;
             overflow-wrap: anywhere;
             transition: all 0.3s ease;
@@ -345,6 +346,44 @@
         .schedule-table td.time-slot:hover {
             background: #fceef0;
             border-left-color: #95475d;
+        }
+
+        .schedule-table .delete-block {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            background: transparent;
+            color: #783e53;
+            box-shadow: none;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .delete-dialog {
+            margin: auto;
+            max-width: min(420px, calc(100% - 32px));
+            padding: 24px;
+            border: 1px solid #dfc5cc;
+            border-radius: 12px;
+            background: #fff8f5;
+            color: #783e53;
+        }
+
+        .delete-dialog::backdrop {
+            background: rgba(60, 35, 40, 0.35);
+        }
+
+        .delete-dialog p {
+            margin: 12px 0;
+        }
+
+        .delete-dialog form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .schedule-table td.time-slot.event {
@@ -797,6 +836,15 @@
         </div>
 
     </div>
+    <dialog id="delete-dialog" class="delete-dialog" aria-labelledby="delete-heading" aria-describedby="delete-description">
+        <h2 id="delete-heading">Delete repeating event?</h2>
+        <p id="delete-description"></p>
+        <form method="dialog">
+            <button value="occurrence">This occurrence</button>
+            <button value="series">Entire series</button>
+            <button value="cancel" autofocus>Cancel</button>
+        </form>
+    </dialog>
     <script>
         const formTabs = [...document.querySelectorAll('.form-tabs [role="tab"]')];
 
@@ -854,6 +902,9 @@
         function updateControls() {
             submitEvent.disabled = busy || storageError;
             submitTask.disabled = busy || storageError;
+            document.querySelectorAll('.delete-block').forEach(button => {
+                button.disabled = busy || storageError;
+            });
             taskOptions.querySelectorAll('button').forEach(button => {
                 button.disabled = busy || storageError;
             });
@@ -897,6 +948,11 @@
             if (!event || typeof event.title !== 'string' || !event.title.trim()
                 || !validDate(event.date)
                 || typeof event.repeat !== 'boolean') return false;
+            if (event.excludedDates !== undefined && (!event.repeat
+                || !Array.isArray(event.excludedDates)
+                || new Set(event.excludedDates).size !== event.excludedDates.length
+                || !event.excludedDates.every(date => validDate(date) && date >= event.date
+                    && new Date(`${date}T00:00:00`).getDay() === new Date(`${event.date}T00:00:00`).getDay()))) return false;
             const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
             if (typeof event.start !== 'string' || !timePattern.test(event.start)
                 || typeof event.end !== 'string'
@@ -975,13 +1031,16 @@
 
         function occursOn(event, date) {
             const key = dateKey(date);
-            return event.date === key || (event.repeat && event.date <= key
-                && new Date(`${event.date}T00:00:00`).getDay() === date.getDay());
+            return !event.excludedDates?.includes(key) && (event.date === key || (event.repeat && event.date <= key
+                && new Date(`${event.date}T00:00:00`).getDay() === date.getDay()));
         }
 
         function eventsConflict(first, second) {
-            const sameDay = occursOn(first, new Date(`${second.date}T00:00:00`))
-                || occursOn(second, new Date(`${first.date}T00:00:00`));
+            const sameDay = first.repeat && second.repeat
+                ? new Date(`${first.date}T00:00:00`).getDay() === new Date(`${second.date}T00:00:00`).getDay()
+                : first.repeat ? occursOn(first, new Date(`${second.date}T00:00:00`))
+                    : second.repeat ? occursOn(second, new Date(`${first.date}T00:00:00`))
+                        : first.date === second.date;
             return sameDay
                 && Math.floor(toMinutes(first.start) / 30) < Math.ceil(toMinutes(second.end) / 30)
                 && Math.ceil(toMinutes(first.end) / 30) > Math.floor(toMinutes(second.start) / 30);
@@ -1006,7 +1065,8 @@
 
         function sameEvent(first, second) {
             return ['title', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes']
-                .every(key => first[key] === second[key]);
+                .every(key => first[key] === second[key])
+                && JSON.stringify([...(first.excludedDates || [])].sort()) === JSON.stringify([...(second.excludedDates || [])].sort());
         }
 
         const scheduleBody = document.getElementById('schedule-body');
@@ -1053,7 +1113,7 @@
                 const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
                 savedEvents.filter(event => occursOn(event, date)).forEach(event => {
                     scheduledItems.push({
-                        ...event, day, type: event.type || 'event',
+                        ...event, day, occurrenceDate: dateKey(date), type: event.type || 'event',
                         description: event.type === 'task' ? `Task - ${event.priority} priority`
                             : event.repeat ? 'Repeats weekly' : ''
                     });
@@ -1089,7 +1149,15 @@
                         const description = document.createElement('div');
                         description.className = 'slot-description';
                         description.textContent = item.description;
-                        cell.append(time, title, description);
+                        const remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'delete-block';
+                        remove.textContent = '\u00d7';
+                        remove.title = `Delete ${item.title}`;
+                        remove.setAttribute('aria-label', `Delete ${item.title}, ${item.occurrenceDate}, ${item.start} - ${item.end}`);
+                        remove.disabled = busy || storageError;
+                        remove.addEventListener('click', () => deleteBlock(item.id, item.occurrenceDate));
+                        cell.append(time, title, description, remove);
                     }
                     row.append(cell);
                 }
@@ -1104,6 +1172,85 @@
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) updateCurrentTime();
         });
+
+        async function deleteBlock(id, occurrenceDate) {
+            if (busy || storageError) return;
+            const original = savedEvents.find(entry => entry.id === id);
+            if (!original) return;
+            const revision = session;
+            let scope = 'series';
+            if (original.repeat) {
+                const dialog = document.getElementById('delete-dialog');
+                document.getElementById('delete-description').textContent =
+                    `"${original.title}" on ${dateFormatter.format(new Date(`${occurrenceDate}T00:00:00`))}. Delete just this occurrence or every week in this series?`;
+                dialog.returnValue = 'cancel';
+                scope = await new Promise(resolve => {
+                    dialog.addEventListener('close', () => resolve(dialog.returnValue), { once: true });
+                    dialog.showModal();
+                });
+                if (!['occurrence', 'series'].includes(scope)) return;
+            }
+            if (session !== revision || busy || storageError) return;
+            const applyDeletion = events => {
+                const target = events.find(entry => entry.id === id);
+                if (!target) return events;
+                if (!sameEvent(target, original)) {
+                    throw new Error('This block changed on another device. Refresh the schedule before deleting it.');
+                }
+                return scope === 'occurrence'
+                    ? events.map(entry => entry.id === id
+                        ? { ...entry, excludedDates: [...new Set([...(entry.excludedDates || []), occurrenceDate])] }
+                        : entry)
+                    : events.filter(entry => entry.id !== id);
+            };
+            const nextPending = pendingEvents.filter(entry => entry.id !== id && !sameEvent(entry, original));
+            const signedIn = Boolean(currentUser);
+            const uid = currentUser?.uid;
+            busy = true;
+            updateControls();
+            setSaveStatus('pending', signedIn ? 'Deleting from cloud... Waiting for confirmation.' : 'Deleting in this browser...');
+            const waiting = signedIn ? setTimeout(() => {
+                if (session === revision) setSaveStatus('pending', 'Still waiting for cloud confirmation. The block has not been removed from this calendar yet. Keep this page open.');
+            }, 15000) : null;
+            try {
+                let confirmed;
+                if (signedIn) {
+                    if (!navigator.onLine) throw new Error('You are offline.');
+                    confirmed = await cloud.saveEvents(uid, existing => applyDeletion(validateEvents(existing, true)));
+                } else {
+                    confirmed = applyDeletion(savedEvents);
+                    backupEvents(confirmed, nextPending);
+                }
+                if (session !== revision) return;
+                savedEvents = confirmed;
+                pendingEvents = nextPending;
+                taskOptions.replaceChildren();
+                taskStatus.textContent = '';
+                if (signedIn) cloudLoaded = true;
+                renderSchedule();
+                const message = signedIn
+                    ? `Deleted from cloud.${pendingEvents.length ? ' Other additions are still not synced. Use Retry sync.' : ''}`
+                    : 'Deleted on this device only - not synced.';
+                setSaveStatus(signedIn && !pendingEvents.length ? 'saved' : 'local', message);
+                if (signedIn) {
+                    try {
+                        backupEvents();
+                    } catch (error) {
+                        console.error('Unable to back up deletion:', error);
+                        setSaveStatus('local', `${message} The browser backup could not be updated. Check browser storage.`);
+                    }
+                }
+            } catch (error) {
+                console.error('Block deletion failed:', error);
+                if (session === revision) setSaveStatus('error', `Deletion not confirmed. The block has been kept in this calendar. ${signedIn ? cloudError(error) : 'Browser storage could not be updated.'} Refresh and try deleting again.`);
+            } finally {
+                clearTimeout(waiting);
+                if (session === revision) {
+                    busy = false;
+                    updateControls();
+                }
+            }
+        }
 
         eventForm.addEventListener('submit', async event => {
             event.preventDefault();
@@ -1213,6 +1360,8 @@
         function* availableTaskWindows(now, deadline, minimum, events) {
             const todayKey = dateKey(now);
             const lastDay = new Date(`${deadline}T00:00:00`);
+            const exceptions = [...new Set(events.flatMap(entry => entry.excludedDates || []))]
+                .filter(date => date <= deadline).sort();
             let blockedDays = 0;
             for (const date = new Date(now.getFullYear(), now.getMonth(), now.getDate()); date <= lastDay; date.setDate(date.getDate() + 1)) {
                 const earliest = dateKey(date) === todayKey
@@ -1222,8 +1371,14 @@
                 yield* windows;
                 const oneOff = events.some(entry => !entry.repeat && entry.date === dateKey(date));
                 blockedDays = !windows.length && !oneOff && earliest <= 480 ? blockedDays + 1 : 0;
-                // Future one-off events and newly starting repeats cannot free a fully blocked recurring week.
-                if (blockedDays === 7) return;
+                // Only an excluded occurrence can free a fully blocked recurring week.
+                if (blockedDays === 7) {
+                    const nextException = exceptions.find(key => key > dateKey(date));
+                    if (!nextException) return;
+                    date.setTime(new Date(`${nextException}T00:00:00`).getTime());
+                    date.setDate(date.getDate() - 1);
+                    blockedDays = 0;
+                }
             }
         }
 
@@ -1232,8 +1387,10 @@
             const maxBlocks = 1000 - events.length;
             const weeklyBounds = new Map();
             function longestFrom(key) {
-                const recurring = events.filter(entry => entry.repeat && entry.date <= key);
-                if (!weeklyBounds.has(recurring.length)) {
+                const recurring = events.filter(entry => entry.repeat && entry.date <= key
+                    && !entry.excludedDates?.some(date => date >= key && date <= deadline));
+                const boundKey = JSON.stringify(recurring.map(entry => entry.id));
+                if (!weeklyBounds.has(boundKey)) {
                     const first = new Date(`${key}T00:00:00`);
                     let longest = 0;
                     for (let day = 0; day < 7; day++) {
@@ -1242,9 +1399,9 @@
                             longest = Math.max(longest, window.end - window.start);
                         }
                     }
-                    weeklyBounds.set(recurring.length, longest);
+                    weeklyBounds.set(boundKey, longest);
                 }
-                return weeklyBounds.get(recurring.length);
+                return weeklyBounds.get(boundKey);
             }
             function canFit(remaining, count, longest) {
                 const needed = Math.ceil(remaining / longest);
