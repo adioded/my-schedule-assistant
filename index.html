@@ -80,7 +80,7 @@
             flex-direction: column;
             gap: 20px;
             min-height: 0;
-            overflow-y: auto;
+            align-self: start;
         }
 
         .week-header {
@@ -377,7 +377,7 @@
         .sidebar-panel {
             background: #fffcf9;
             border-radius: 12px;
-            padding: 20px;
+            padding: 16px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
         }
 
@@ -385,7 +385,7 @@
             display: flex;
             gap: 6px;
             padding: 5px;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             border-radius: 10px;
             background: #f9e9e9;
         }
@@ -410,14 +410,25 @@
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            min-width: 0;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #event-status:empty {
+            display: none;
         }
 
         label {
             display: block;
             font-weight: 500;
             color: #783e53;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             font-size: 0.95em;
         }
 
@@ -427,7 +438,8 @@
         select,
         textarea {
             width: 100%;
-            padding: 10px;
+            min-width: 0;
+            padding: 8px;
             border: 2px solid #efdadd;
             border-radius: 8px;
             font-family: inherit;
@@ -577,11 +589,6 @@
             }
         }
 
-        .footer {
-            text-align: center;
-            color: #735e67;
-            font-size: 0.9em;
-        }
     </style>
 </head>
 <body>
@@ -659,20 +666,21 @@
                         <label for="event-date">Date</label>
                         <input type="date" id="event-date" required>
                     </div>
-                    <div class="form-group">
-                        <label for="event-time">Start Time</label>
-                        <input type="time" id="event-time" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="event-end">End Time</label>
-                        <input type="time" id="event-end" required>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="event-time">Start Time</label>
+                            <input type="time" id="event-time" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="event-end">End Time</label>
+                            <input type="time" id="event-end" required>
+                        </div>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="event-repeat">
                         <label for="event-repeat" style="margin: 0;">Repeat Weekly</label>
                     </div>
                     <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Add Event</button>
-                    <p class="schedule-note" style="margin-top: 12px;">Sign in to sync events across devices. Without sign-in, events stay in this browser. Each event reserves its half-hour slots. Use Refresh to load changes from another device.</p>
                     <p id="event-status" class="schedule-note" role="status" style="margin-top: 12px;"></p>
                 </form>
 
@@ -686,17 +694,19 @@
                         <label for="task-deadline">Deadline</label>
                         <input type="date" id="task-deadline">
                     </div>
-                    <div class="form-group">
-                        <label for="task-duration">Est. Duration (hours)</label>
-                        <input type="text" id="task-duration" placeholder="2">
-                    </div>
-                    <div class="form-group">
-                        <label for="task-priority">Priority</label>
-                        <select id="task-priority">
-                            <option>Low</option>
-                            <option selected>Medium</option>
-                            <option>High</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task-duration">Duration (hours)</label>
+                            <input type="text" id="task-duration" placeholder="2">
+                        </div>
+                        <div class="form-group">
+                            <label for="task-priority">Priority</label>
+                            <select id="task-priority">
+                                <option>Low</option>
+                                <option selected>Medium</option>
+                                <option>High</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="task-flexible">
@@ -709,9 +719,6 @@
             </div>
         </div>
 
-        <footer class="footer">
-            <p>© 2024 My Schedule Assistant | Helping you manage your time wisely</p>
-        </footer>
     </div>
     <script>
         const formTabs = [...document.querySelectorAll('.form-tabs [role="tab"]')];
