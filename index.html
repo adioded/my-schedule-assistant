@@ -782,6 +782,7 @@
         let storageError = false;
         let cloudLoaded = false;
         let session = 0;
+        let initialTimeFocusPending = true;
         const saveStatus = document.getElementById('save-status');
         const authStatus = document.getElementById('auth-status');
         const submitEvent = eventForm.querySelector('button[type="submit"]');
@@ -874,6 +875,7 @@
             busy = false;
             updateControls();
             renderSchedule();
+            focusInitialTime();
         }
 
         const today = new Date();
@@ -1163,7 +1165,7 @@
         }
 
         async function accountChanged(user) {
-            session++;
+            const revision = ++session;
             scrollController?.abort();
             authStatus.textContent = '';
             eventStatus.textContent = '';
@@ -1195,6 +1197,7 @@
             renderSchedule();
             updateControls();
             if (!storageError) await refreshCloud();
+            if (session === revision) focusInitialTime();
         }
 
         document.getElementById('sign-in').addEventListener('click', async () => {
@@ -1240,6 +1243,13 @@
         });
 
         let scrollController;
+        function focusInitialTime() {
+            if (!initialTimeFocusPending) return;
+            initialTimeFocusPending = false;
+            const now = new Date();
+            focusTime(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
+        }
+
         function focusTime(minutes) {
             scrollController?.abort();
             const scroll = document.querySelector('.schedule-scroll');
@@ -1247,9 +1257,10 @@
             const row = scheduleBody.rows[currentSlot];
             const headerHeight = document.querySelector('.schedule-table thead').getBoundingClientRect().height;
             const rowTop = row.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
+            const timeTop = rowTop + row.getBoundingClientRect().height * (minutes % 30) / 30;
             const target = Math.max(0, Math.min(
                 scroll.scrollHeight - scroll.clientHeight,
-                rowTop - headerHeight - (scroll.clientHeight - headerHeight - row.getBoundingClientRect().height) / 2
+                timeTop - headerHeight - (scroll.clientHeight - headerHeight) / 2
             ));
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 scroll.scrollTo({ top: target, behavior: 'instant' });
@@ -1262,12 +1273,6 @@
             const controller = new AbortController();
             scrollController = controller;
             let frame;
-            // Let manual scrolling take over immediately.
-            ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(type => {
-                scroll.addEventListener(type, () => controller.abort(), {
-                    once: true, passive: true, signal: controller.signal
-                });
-            });
             controller.signal.addEventListener('abort', () => cancelAnimationFrame(frame), { once: true });
 
             function animate(now) {
@@ -1282,7 +1287,13 @@
 
             frame = requestAnimationFrame(animate);
         }
-        requestAnimationFrame(() => focusTime(today.getHours() * 60 + today.getMinutes()));
+        ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(type => {
+            document.querySelector('.schedule-scroll').addEventListener(type, () => {
+                initialTimeFocusPending = false;
+                scrollController?.abort();
+            }, { passive: true });
+        });
+        focusTime(today.getHours() * 60 + today.getMinutes() + today.getSeconds() / 60);
 
         async function initializeCloud() {
             try {
