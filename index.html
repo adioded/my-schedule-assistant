@@ -231,6 +231,32 @@
             outline-offset: 4px;
         }
 
+        .schedule-grid {
+            position: relative;
+        }
+
+        .current-time-line {
+            position: absolute;
+            height: 2px;
+            background: #b13d4c;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .current-time-line span {
+            position: absolute;
+            right: calc(100% + 6px);
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 2px 4px;
+            border-radius: 4px;
+            background: #b13d4c;
+            color: white;
+            font-size: 0.75em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
         .schedule-note {
             color: #735e67;
             font-size: 0.9em;
@@ -301,43 +327,37 @@
             background: #fff8f5;
         }
 
-        .schedule-table td[rowspan] {
-            padding: 4px;
-            background: #fff6f2;
-        }
-
         .schedule-table td.current-day {
             background: #f9e9ee;
             border-left: 1px solid #d5a1b0;
             border-right-color: #d5a1b0;
         }
 
-        .time-slot {
+        .schedule-table td.time-slot {
             background: #fffcf9;
             border-left: 4px solid #b85e70;
             padding: 8px;
             border-radius: 6px;
-            min-height: 100%;
             overflow-wrap: anywhere;
             transition: all 0.3s ease;
         }
 
-        .time-slot:hover {
+        .schedule-table td.time-slot:hover {
             background: #fceef0;
             border-left-color: #95475d;
         }
 
-        .time-slot.event {
+        .schedule-table td.time-slot.event {
             border-left-color: #b85e70;
             background: #f7e2e8;
         }
 
-        .time-slot.task {
+        .schedule-table td.time-slot.task {
             border-left-color: #cb7059;
             background: #fce5dc;
         }
 
-        .time-slot.empty {
+        .schedule-table td.time-slot.empty {
             border-left-color: #dfc5cc;
             background: #fff8f5;
         }
@@ -631,6 +651,7 @@
 
                 <p id="save-status" class="save-status" role="status" data-state="pending">Connecting to sign-in service...</p>
                 <div class="schedule-scroll" role="region" aria-label="Weekly schedule" tabindex="0">
+                <div class="schedule-grid">
                 <table class="schedule-table" aria-label="Sunday to Saturday schedule in half-hour slots">
                     <thead>
                         <tr>
@@ -646,6 +667,8 @@
                     </thead>
                     <tbody id="schedule-body"></tbody>
                 </table>
+                <div id="current-time-line" class="current-time-line" role="img" aria-label="Current time" hidden><span></span></div>
+                </div>
                 </div>
             </div>
 
@@ -866,10 +889,6 @@
             dateLabel.dateTime = dateKey(date);
             dateLabel.textContent = dateFormatter.format(date);
             header.append(dateLabel);
-            if (day === today.getDay()) {
-                header.classList.add('current-day');
-                dateLabel.setAttribute('aria-current', 'date');
-            }
         });
 
         function occursOn(event, date) {
@@ -908,6 +927,43 @@
         }
 
         const scheduleBody = document.getElementById('schedule-body');
+        const scheduleGrid = document.querySelector('.schedule-grid');
+        const currentTimeLine = document.getElementById('current-time-line');
+
+        function updateCurrentTime() {
+            const now = new Date();
+            const currentDate = dateKey(now);
+            let currentDay = -1;
+            document.querySelectorAll('.schedule-table thead th:not(.time-column)').forEach((header, day) => {
+                const date = header.querySelector('time');
+                const isToday = date.dateTime === currentDate;
+                header.classList.toggle('current-day', isToday);
+                if (isToday) {
+                    currentDay = day;
+                    date.setAttribute('aria-current', 'date');
+                } else {
+                    date.removeAttribute('aria-current');
+                }
+            });
+            scheduleBody.querySelectorAll('td').forEach(cell => {
+                cell.classList.toggle('current-day', Number(cell.dataset.day) === currentDay);
+            });
+            currentTimeLine.hidden = currentDay === -1;
+            if (currentTimeLine.hidden) return;
+
+            const minutes = now.getHours() * 60 + now.getMinutes();
+            const row = scheduleBody.rows[Math.floor(minutes / 30)];
+            const rowBounds = row.getBoundingClientRect();
+            const timeWidth = document.querySelector('.schedule-table .time-column').getBoundingClientRect().width;
+            const tableWidth = document.querySelector('.schedule-table').getBoundingClientRect().width;
+            const fraction = (minutes % 30 + now.getSeconds() / 60) / 30;
+            currentTimeLine.style.top = `${rowBounds.top - scheduleGrid.getBoundingClientRect().top + rowBounds.height * fraction}px`;
+            currentTimeLine.style.left = `${timeWidth}px`;
+            currentTimeLine.style.width = `${tableWidth - timeWidth}px`;
+            currentTimeLine.firstElementChild.textContent = formatTime(minutes);
+            currentTimeLine.setAttribute('aria-label', `Current time: ${formatTime(minutes)}`);
+        }
+
         function renderSchedule() {
             const scheduledItems = [];
             for (let day = 0; day < 7; day++) {
@@ -933,11 +989,10 @@
                     if (item && toMinutes(item.start) < start) continue;
 
                     const cell = document.createElement('td');
-                    if (day === today.getDay()) cell.classList.add('current-day');
+                    cell.dataset.day = day;
                     if (item) {
                         cell.rowSpan = Math.ceil(toMinutes(item.end) / 30) - Math.floor(toMinutes(item.start) / 30);
-                        const block = document.createElement('div');
-                        block.className = `time-slot ${item.type}`;
+                        cell.classList.add('time-slot', item.type);
                         const time = document.createElement('span');
                         time.className = 'slot-time';
                         time.textContent = `${item.start} – ${item.end}`;
@@ -947,15 +1002,21 @@
                         const description = document.createElement('div');
                         description.className = 'slot-description';
                         description.textContent = item.description;
-                        block.append(time, title, description);
-                        cell.append(block);
+                        cell.append(time, title, description);
                     }
                     row.append(cell);
                 }
                 scheduleBody.append(row);
             }
+            updateCurrentTime();
         }
         renderSchedule();
+        new ResizeObserver(updateCurrentTime).observe(document.querySelector('.schedule-table'));
+        setInterval(updateCurrentTime, 30000);
+        window.addEventListener('focus', updateCurrentTime);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) updateCurrentTime();
+        });
 
         eventForm.addEventListener('submit', async event => {
             event.preventDefault();
