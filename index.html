@@ -605,7 +605,10 @@
             const row = scheduleBody.rows[currentSlot];
             const headerHeight = document.querySelector('.schedule-table thead').getBoundingClientRect().height;
             const rowTop = row.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
-            scroll.scrollTop = rowTop - headerHeight - (scroll.clientHeight - headerHeight - row.getBoundingClientRect().height) / 2;
+            scroll.scrollTo({
+                top: rowTop - headerHeight - (scroll.clientHeight - headerHeight - row.getBoundingClientRect().height) / 2,
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+            });
         });
     </script>
 </body>
