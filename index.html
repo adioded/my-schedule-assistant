@@ -484,20 +484,20 @@
 
         .subject-labels,
         .subject-label {
-            --label-background: #e5eee2;
-            --label-color: #355744;
-            --label-border: #adc2a6;
-            --label-hover: #d3e2ce;
-            --label-selected: #496b4f;
+            --label-background: #e8ebee;
+            --label-color: #414b56;
+            --label-border: #b6bec7;
+            --label-hover: #d7dde3;
+            --label-selected: #525f6d;
         }
 
         .type-labels,
         .type-label {
-            --label-background: #fff0cc;
-            --label-color: #775019;
-            --label-border: #d9b866;
-            --label-hover: #f5dfaa;
-            --label-selected: #91611c;
+            --label-background: #eae5df;
+            --label-color: #595047;
+            --label-border: #c4b8aa;
+            --label-hover: #dcd3c9;
+            --label-selected: #6b6054;
         }
 
         .slot-time {
@@ -588,6 +588,70 @@
         .label-options button[aria-pressed="true"] {
             background: var(--label-selected);
             color: white;
+        }
+
+        .form-group .label-heading {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .label-add {
+            padding: 0;
+            width: 22px;
+            height: 22px;
+            border: 1px solid #b6bec7;
+            background: #e8ebee;
+            color: #414b56;
+            box-shadow: none;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .label-chip {
+            display: inline-flex;
+            position: relative;
+            max-width: 100%;
+        }
+
+        .label-chip > button[aria-pressed] {
+            padding-right: 21px;
+            text-align: left;
+        }
+
+        .label-chip .label-remove {
+            position: absolute;
+            right: 2px;
+            top: 2px;
+            padding: 0;
+            width: 17px;
+            height: 17px;
+            font-size: 14px;
+            line-height: 1;
+            border: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .label-chip:hover .label-remove,
+        .label-chip:focus-within .label-remove {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        @media (hover: none) {
+            .label-chip .label-remove {
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+
+        #labels-status {
+            margin: 8px 0;
+        }
+
+        #labels-status:empty {
+            display: none;
         }
 
         #event-status:empty {
@@ -953,6 +1017,7 @@
                         <button type="button" id="task-tab" role="tab" aria-selected="false" aria-controls="task-panel" tabindex="-1">Add Task</button>
                     </div>
                     <button id="cancel-edit" type="button" hidden>Cancel editing</button>
+                    <p id="labels-status" class="schedule-note" role="status"></p>
                 <!-- Add Event Panel -->
                 <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
@@ -1073,6 +1138,18 @@
             <button value="cancel" autofocus>Cancel</button>
         </form>
     </dialog>
+    <dialog id="label-dialog" class="delete-dialog" aria-labelledby="label-dialog-heading">
+        <h2 id="label-dialog-heading">Add label</h2>
+        <form id="label-form">
+            <fieldset id="label-fields" style="border: 0; padding: 12px 0; width: 100%;">
+                <label for="label-name">Label name</label>
+                <input id="label-name" type="text" maxlength="100" required>
+                <p id="label-dialog-status" role="status"></p>
+                <button type="submit">Add label</button>
+                <button type="button" id="label-cancel">Cancel</button>
+            </fieldset>
+        </form>
+    </dialog>
     <script>
         const formTabs = [...document.querySelectorAll('.form-tabs [role="tab"]')];
 
@@ -1127,11 +1204,31 @@
             subject: ['Generative AI', 'Quantum Physics', 'Electrical Circuits', 'Electrical Lab 1b', 'Random Signals', 'Soccer'],
             'type-label': ['Lecture', 'Tutorial', 'Workshop', 'Assignment', 'Preparation']
         };
+        const labelsKey = 'schedule-assistant-labels-v1';
+        let labelChoices = validateLabels(null);
+        let labelsReady = false;
+        const labelsStatus = document.getElementById('labels-status');
+        const labelDialog = document.getElementById('label-dialog');
+        let labelField = 'subject';
         for (const prefix of ['event', 'task']) {
-            for (const [field, suggestions] of Object.entries(labelSuggestions)) {
-                const input = document.getElementById(`${prefix}-${field}`);
-                const options = document.getElementById(`${prefix}-${field}-options`);
-                suggestions.forEach(label => appendLabelButton(input, options, label));
+            for (const field of Object.keys(labelSuggestions)) {
+                const heading = document.getElementById(`${prefix}-${field}-heading`);
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'label-add';
+                add.textContent = '+';
+                add.setAttribute('aria-label', `Add ${field === 'subject' ? 'subject' : 'type'}`);
+                add.title = add.getAttribute('aria-label');
+                add.addEventListener('click', () => {
+                    if (busy || !labelsReady || storageError) return;
+                    labelField = field;
+                    document.getElementById('label-dialog-heading').textContent = `Add ${field === 'subject' ? 'subject' : 'type'}`;
+                    document.getElementById('label-name').value = '';
+                    document.getElementById('label-dialog-status').textContent = '';
+                    labelDialog.showModal();
+                    document.getElementById('label-name').focus();
+                });
+                heading.append(add);
             }
             const form = document.getElementById(`${prefix}-panel`);
             form.addEventListener('input', event => {
@@ -1148,18 +1245,39 @@
                 queueMicrotask(updateLabelButtons);
             });
         }
+        document.getElementById('label-cancel').addEventListener('click', () => labelDialog.close());
+        document.getElementById('label-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const revision = session;
+            document.getElementById('label-dialog-status').textContent = 'Saving label...';
+            const saved = await changeLabel(labelField, document.getElementById('label-name').value.trim(), false);
+            if (session !== revision) return;
+            if (saved) labelDialog.close();
+            else document.getElementById('label-dialog-status').textContent = labelsStatus.textContent;
+        });
 
-        function appendLabelButton(input, options, label, custom = false) {
+        function appendLabelButton(input, options, label, field) {
+            const chip = document.createElement('span');
+            chip.className = 'label-chip';
             const button = document.createElement('button');
             button.type = 'button';
             button.textContent = label;
-            button.setAttribute('aria-pressed', 'false');
-            if (custom) button.dataset.custom = 'true';
+            button.setAttribute('aria-pressed', String(input.value.trim() === label));
+            button.disabled = busy || storageError;
             button.addEventListener('click', () => {
                 input.value = input.value === label ? '' : label;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            options.append(button);
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'label-remove';
+            remove.textContent = '\u00d7';
+            remove.setAttribute('aria-label', `Delete ${field === 'subject' ? 'subject' : 'type'}: ${label}`);
+            remove.title = remove.getAttribute('aria-label');
+            remove.disabled = busy || storageError || !labelsReady;
+            remove.addEventListener('click', () => changeLabel(field, label, true));
+            chip.append(button, remove);
+            options.append(chip);
         }
 
         function updateLabelButtons() {
@@ -1168,15 +1286,128 @@
                     const input = document.getElementById(`${prefix}-${field}`);
                     const value = input.value.trim();
                     const options = document.getElementById(`${prefix}-${field}-options`);
-                    options.querySelectorAll('button[data-custom]').forEach(button => {
-                        if (button.textContent !== value) button.remove();
-                    });
-                    if (value && ![...options.querySelectorAll('button')].some(button => button.textContent === value)) {
-                        appendLabelButton(input, options, value, true);
+                    const choices = [...labelChoices[field]];
+                    if (value && !choices.includes(value)) choices.push(value);
+                    const signature = JSON.stringify(choices);
+                    if (options.dataset.choices !== signature) {
+                        options.replaceChildren();
+                        choices.forEach(label => appendLabelButton(input, options, label, field));
+                        options.dataset.choices = signature;
                     }
-                    options.querySelectorAll('button').forEach(button => {
+                    options.querySelectorAll('button[aria-pressed]').forEach(button => {
                         button.setAttribute('aria-pressed', String(button.textContent === value));
                     });
+                }
+            }
+        }
+
+        function validateLabels(value) {
+            const choices = value === null ? labelSuggestions : value;
+            if (!choices || typeof choices !== 'object'
+                || Object.keys(choices).length !== 2
+                || !Object.keys(labelSuggestions).every(field => Array.isArray(choices[field])
+                    && choices[field].length <= 100
+                    && choices[field].every(label => typeof label === 'string'
+                        && label.length > 0 && label.length <= 100 && label === label.trim())
+                    && new Set(choices[field].map(label => label.toLowerCase())).size === choices[field].length)) {
+                throw new Error('Saved label choices have an invalid format.');
+            }
+            return { subject: [...choices.subject], 'type-label': [...choices['type-label']] };
+        }
+
+        function loadLabelBackup() {
+            labelDialog.close();
+            labelsReady = false;
+            labelChoices = validateLabels(null);
+            labelsStatus.textContent = '';
+            try {
+                const stored = localStorage.getItem(currentUser ? `${labelsKey}:${currentUser.uid}` : labelsKey);
+                labelChoices = validateLabels(stored === null ? null : JSON.parse(stored));
+                labelsReady = !currentUser;
+            } catch (error) {
+                console.error('Unable to load label choices:', error);
+                labelsStatus.textContent = 'Could not load saved labels. Label changes are disabled; check browser storage and reload.';
+            }
+            updateLabelButtons();
+        }
+
+        async function loadCloudLabels(uid, revision) {
+            try {
+                const choices = validateLabels(await cloud.loadLabels(uid));
+                if (session !== revision) return;
+                labelChoices = choices;
+                labelsReady = true;
+                labelsStatus.textContent = '';
+                try {
+                    localStorage.setItem(`${labelsKey}:${uid}`, JSON.stringify(choices));
+                } catch (error) {
+                    console.error('Unable to back up labels:', error);
+                    labelsStatus.textContent = 'Labels loaded from cloud, but their browser backup could not be updated.';
+                }
+            } catch (error) {
+                console.error('Unable to load cloud labels:', error);
+                if (session !== revision) return;
+                labelsReady = false;
+                labelsStatus.textContent = `Label choices could not be refreshed. ${cloudError(error)} Use Refresh / Retry sync before changing labels.`;
+            }
+            updateLabelButtons();
+        }
+
+        async function changeLabel(field, label, remove) {
+            if (busy || storageError || !labelsReady) return;
+            if (!label || label.length > 100) {
+                labelsStatus.textContent = 'Enter a label between 1 and 100 characters.';
+                return;
+            }
+            const revision = session;
+            const uid = currentUser?.uid;
+            const merge = existing => {
+                const choices = validateLabels(existing);
+                const match = choices[field].find(value => value.toLowerCase() === label.toLowerCase());
+                if (remove) choices[field] = choices[field].filter(value => value !== match);
+                else {
+                    if (match) throw new Error('That label already exists.');
+                    if (choices[field].length >= 100) throw new Error('You can save up to 100 labels in each group.');
+                    choices[field].push(label);
+                }
+                return choices;
+            };
+            busy = true;
+            updateControls();
+            labelsStatus.textContent = uid ? 'Saving labels to cloud...' : 'Saving labels...';
+            try {
+                if (uid && !navigator.onLine) throw new Error('You are offline. Reconnect and try again.');
+                const choices = uid ? await cloud.saveLabels(uid, merge) : merge(labelChoices);
+                if (session !== revision) return;
+                if (!uid) localStorage.setItem(labelsKey, JSON.stringify(choices));
+                labelChoices = choices;
+                if (remove) {
+                    for (const prefix of ['event', 'task']) {
+                        const input = document.getElementById(`${prefix}-${field}`);
+                        if (input.value.toLowerCase() === label.toLowerCase()) {
+                            input.value = '';
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }
+                }
+                labelsStatus.textContent = uid ? 'Labels saved to your account.' : 'Labels saved in this browser. Sign in for account-synced labels.';
+                if (uid) {
+                    try {
+                        localStorage.setItem(`${labelsKey}:${uid}`, JSON.stringify(choices));
+                    } catch (error) {
+                        console.error('Unable to back up labels:', error);
+                        labelsStatus.textContent = 'Labels saved to cloud, but their browser backup could not be updated.';
+                    }
+                }
+                return true;
+            } catch (error) {
+                console.error('Label change failed:', error);
+                if (session === revision) labelsStatus.textContent = `Label change was not confirmed saved. ${cloudError(error)} Refresh to check the latest choices before retrying.`;
+            } finally {
+                if (session === revision) {
+                    busy = false;
+                    updateLabelButtons();
+                    updateControls();
                 }
             }
         }
@@ -1199,6 +1430,10 @@
             document.querySelectorAll('.delete-block, .edit-block, .label-options button').forEach(button => {
                 button.disabled = busy || storageError;
             });
+            document.querySelectorAll('.label-add, .label-remove').forEach(button => {
+                button.disabled = busy || storageError || !labelsReady;
+            });
+            document.getElementById('label-fields').disabled = busy || storageError || !labelsReady;
             taskOptions.querySelectorAll('button').forEach(button => {
                 button.disabled = busy || storageError;
             });
@@ -1294,6 +1529,7 @@
         function loadGuest(message) {
             cancelEditing();
             currentUser = null;
+            loadLabelBackup();
             pendingEvents = [];
             savedEvents = [];
             storageError = false;
@@ -2145,6 +2381,8 @@
             updateControls();
             setSaveStatus('pending', 'Loading the latest cloud schedule...');
             try {
+                await loadCloudLabels(uid, revision);
+                if (session !== revision) return;
                 const events = validateEvents(await cloud.loadEvents(uid), true);
                 if (session !== revision) return;
                 savedEvents = events;
@@ -2186,6 +2424,7 @@
                 return;
             }
             currentUser = user;
+            loadLabelBackup();
             savedEvents = [];
             pendingEvents = [];
             storageError = false;

@@ -13,6 +13,7 @@ export function createCloud() {
     const auth = getAuth(app);
     const database = getFirestore(app);
     const schedule = uid => doc(database, 'users', uid, 'schedules', 'main');
+    const labels = uid => doc(database, 'users', uid, 'labels', 'main');
     const eventsFrom = snapshot => snapshot.exists() ? snapshot.data().events : [];
 
     return {
@@ -28,6 +29,19 @@ export function createCloud() {
         signOut: () => signOut(auth),
         async loadEvents(uid) {
             return eventsFrom(await getDocFromServer(schedule(uid)));
+        },
+        async loadLabels(uid) {
+            const snapshot = await getDocFromServer(labels(uid));
+            return snapshot.exists() ? snapshot.data() : null;
+        },
+        saveLabels(uid, merge) {
+            return runTransaction(database, async transaction => {
+                const reference = labels(uid);
+                const snapshot = await transaction.get(reference);
+                const choices = merge(snapshot.exists() ? snapshot.data() : null);
+                transaction.set(reference, choices);
+                return choices;
+            });
         },
         saveEvents(uid, merge) {
             // Merge against the latest server copy, including concurrent edits.

@@ -1,6 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{uid}/labels/main {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['subject', 'type-label'])
+        && request.resource.data.keys().hasOnly(['subject', 'type-label'])
+        && request.resource.data.subject is list
+        && request.resource.data.subject.size() <= 100
+        && request.resource.data['type-label'] is list
+        && request.resource.data['type-label'].size() <= 100;
+    }
     match /users/{uid}/schedules/main {
       function isOwner() {
         return request.auth != null && request.auth.uid == uid;
