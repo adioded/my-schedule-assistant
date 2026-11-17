@@ -596,10 +596,88 @@
             min-width: 0;
         }
 
-        #task-minimum,
-        #task-maximum {
+        .block-range {
+            position: relative;
+            height: 32px;
+        }
+
+        .block-range::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            top: 13px;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #dfc5cc var(--range-min), #95475d var(--range-min), #95475d var(--range-max), #dfc5cc var(--range-max));
+        }
+
+        .block-range input,
+        .block-range input:focus {
+            position: absolute;
+            inset: 0;
             width: 100%;
-            accent-color: #95475d;
+            height: 32px;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            appearance: none;
+            pointer-events: none;
+            touch-action: none;
+        }
+
+        #task-minimum {
+            clip-path: inset(0 calc(100% - var(--range-mid)) 0 0);
+        }
+
+        #task-maximum {
+            clip-path: inset(0 0 0 var(--range-mid));
+        }
+
+        .block-range input::-webkit-slider-runnable-track {
+            height: 6px;
+            background: transparent;
+        }
+
+        .block-range input::-moz-range-track {
+            height: 6px;
+            background: transparent;
+        }
+
+        .block-range input::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            margin-top: -7px;
+            border: 2px solid #fff8f5;
+            border-radius: 50%;
+            background: #95475d;
+            pointer-events: auto;
+            cursor: ew-resize;
+        }
+
+        .block-range input::-moz-range-thumb {
+            box-sizing: border-box;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #fff8f5;
+            border-radius: 50%;
+            background: #95475d;
+            pointer-events: auto;
+            cursor: ew-resize;
+        }
+
+        .block-range input:focus-visible::-webkit-slider-thumb {
+            outline: 2px solid #783e53;
+        }
+
+        .block-range input:focus-visible::-moz-range-thumb {
+            outline: 2px solid #783e53;
+        }
+
+        #task-split-options:disabled .block-range {
+            opacity: 0.6;
         }
 
         #task-options {
@@ -860,7 +938,7 @@
                 <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
                         <label for="event-title">Event Title</label>
-                        <input type="text" id="event-title" placeholder="e.g., Lecture" maxlength="200" required>
+                        <input type="text" id="event-title" placeholder="Subject - Type" maxlength="203" required>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -900,7 +978,7 @@
                 <form id="task-panel" role="tabpanel" aria-labelledby="task-tab" hidden>
                     <div class="form-group">
                         <label for="task-title">Task Title</label>
-                        <input type="text" id="task-title" placeholder="e.g., Complete report" maxlength="200" required>
+                        <input type="text" id="task-title" placeholder="Subject - Type" maxlength="203" required>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -940,12 +1018,11 @@
                     </div>
                     <fieldset id="task-split-options" hidden disabled>
                         <div class="form-group">
-                            <label for="task-minimum">Minimum block: <output id="task-minimum-label" for="task-minimum">1 hour</output></label>
-                            <input type="range" id="task-minimum" min="0.5" max="1" step="0.5" value="1">
-                        </div>
-                        <div class="form-group">
-                            <label for="task-maximum">Maximum block: <output id="task-maximum-label" for="task-maximum">1 hour</output></label>
-                            <input type="range" id="task-maximum" min="0.5" max="1" step="0.5" value="1">
+                            <label for="task-minimum">Block range: <output id="task-block-range-label" for="task-minimum task-maximum">1 - 1 hours</output></label>
+                            <div id="task-block-range" class="block-range" role="group" aria-label="Block length range">
+                                <input type="range" id="task-minimum" aria-label="Minimum block length" min="0.5" max="1" step="0.5" value="1">
+                                <input type="range" id="task-maximum" aria-label="Maximum block length" min="0.5" max="1" step="0.5" value="1">
+                            </div>
                         </div>
                     </fieldset>
                     <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Suggest times</button>
@@ -1048,7 +1125,13 @@
                 });
             }
             const form = document.getElementById(`${prefix}-panel`);
-            form.addEventListener('input', updateLabelButtons);
+            form.addEventListener('input', event => {
+                if (event.target.id === `${prefix}-subject` || event.target.id === `${prefix}-type-label`) {
+                    const labels = readLabels(prefix);
+                    document.getElementById(`${prefix}-title`).value = [labels.subject, labels.typeLabel].filter(Boolean).join(' - ');
+                }
+                updateLabelButtons();
+            });
             form.addEventListener('reset', () => queueMicrotask(updateLabelButtons));
         }
 
@@ -1725,19 +1808,31 @@
             taskSplitOptions.hidden = !split;
             taskSplitOptions.disabled = !split || busy || storageError || !validDuration;
             const minimum = Number(slider.value);
-            document.getElementById('task-minimum-label').textContent = `${minimum} ${minimum === 1 ? 'hour' : 'hours'}`;
             const maximumSlider = document.getElementById('task-maximum');
             maximumSlider.max = slider.max;
-            maximumSlider.min = slider.value;
             maximumSlider.value = maximumSlider.dataset.custom
                 ? String(Math.max(minimum, Math.min(Number(maximumSlider.value), Number(maximumSlider.max))))
                 : slider.max;
             const maximum = Number(maximumSlider.value);
-            document.getElementById('task-maximum-label').textContent = `${maximum} ${maximum === 1 ? 'hour' : 'hours'}`;
+            document.getElementById('task-block-range-label').textContent = minimum === maximum
+                ? `${minimum} ${minimum === 1 ? 'hour' : 'hours'}` : `${minimum} - ${maximum} hours`;
+            slider.setAttribute('aria-valuetext', `${minimum} ${minimum === 1 ? 'hour' : 'hours'}`);
+            maximumSlider.setAttribute('aria-valuemin', String(minimum));
+            maximumSlider.setAttribute('aria-valuetext', `${maximum} ${maximum === 1 ? 'hour' : 'hours'}`);
+            const span = Number(slider.max) - Number(slider.min);
+            const lower = span ? (minimum - Number(slider.min)) / span : 0;
+            const upper = span ? (maximum - Number(slider.min)) / span : 0;
+            const midpoint = (lower + upper) / 2;
+            const range = document.getElementById('task-block-range');
+            range.style.setProperty('--range-min', `${lower * 100}%`);
+            range.style.setProperty('--range-max', `${upper * 100}%`);
+            range.style.setProperty('--range-mid', `calc(${midpoint * 100}% + ${10 - 20 * midpoint}px)`);
         }
 
         function resetTaskForm() {
             taskForm.reset();
+            document.getElementById('task-minimum').max = '1';
+            document.getElementById('task-minimum').value = '1';
             delete document.getElementById('task-maximum').dataset.custom;
             taskOptions.replaceChildren();
             document.getElementById('task-deadline').value = dateKey(new Date());
