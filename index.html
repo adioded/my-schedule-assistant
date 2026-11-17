@@ -349,6 +349,8 @@
         }
 
         .schedule-table .delete-block {
+            opacity: 0;
+            pointer-events: none;
             position: absolute;
             top: 3px;
             right: 3px;
@@ -360,6 +362,35 @@
             box-shadow: none;
             font-size: 18px;
             line-height: 1;
+        }
+
+        .time-slot:hover .delete-block,
+        .time-slot:focus-within .delete-block {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .edit-block {
+            display: block;
+            width: 100%;
+            padding: 0;
+            background: transparent;
+            color: inherit;
+            text-align: left;
+            box-shadow: none;
+            font: inherit;
+        }
+
+        .edit-block:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        @media (hover: none) {
+            .schedule-table .delete-block {
+                opacity: 1;
+                pointer-events: auto;
+            }
         }
 
         .delete-dialog {
@@ -761,6 +792,7 @@
                         <button type="button" id="event-tab" role="tab" aria-selected="true" aria-controls="event-panel">Add Event</button>
                         <button type="button" id="task-tab" role="tab" aria-selected="false" aria-controls="task-panel" tabindex="-1">Add Task</button>
                     </div>
+                    <button id="cancel-edit" type="button" hidden>Cancel editing</button>
                 <!-- Add Event Panel -->
                 <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
@@ -845,6 +877,15 @@
             <button value="cancel" autofocus>Cancel</button>
         </form>
     </dialog>
+    <dialog id="edit-dialog" class="delete-dialog" aria-labelledby="edit-heading">
+        <h2 id="edit-heading">What would you like to edit?</h2>
+        <p>Change only this block or occurrence, or all blocks in the task / occurrences in the series?</p>
+        <form method="dialog">
+            <button value="one">Only this one</button>
+            <button value="all">All of them</button>
+            <button value="cancel" autofocus>Cancel</button>
+        </form>
+    </dialog>
     <script>
         const formTabs = [...document.querySelectorAll('.form-tabs [role="tab"]')];
 
@@ -889,6 +930,7 @@
         let cloudLoaded = false;
         let session = 0;
         let initialTimeFocusPending = true;
+        let editing = null;
         const saveStatus = document.getElementById('save-status');
         const authStatus = document.getElementById('auth-status');
         const submitEvent = eventForm.querySelector('button[type="submit"]');
@@ -902,7 +944,8 @@
         function updateControls() {
             submitEvent.disabled = busy || storageError;
             submitTask.disabled = busy || storageError;
-            document.querySelectorAll('.delete-block').forEach(button => {
+            document.getElementById('cancel-edit').disabled = busy;
+            document.querySelectorAll('.delete-block, .edit-block').forEach(button => {
                 button.disabled = busy || storageError;
             });
             taskOptions.querySelectorAll('button').forEach(button => {
@@ -993,6 +1036,7 @@
         }
 
         function loadGuest(message) {
+            cancelEditing();
             currentUser = null;
             pendingEvents = [];
             savedEvents = [];
@@ -1157,7 +1201,17 @@
                         remove.setAttribute('aria-label', `Delete ${item.title}, ${item.occurrenceDate}, ${item.start} - ${item.end}`);
                         remove.disabled = busy || storageError;
                         remove.addEventListener('click', () => deleteBlock(item.id, item.occurrenceDate));
-                        cell.append(time, title, description, remove);
+                        const edit = document.createElement('button');
+                        edit.type = 'button';
+                        edit.className = 'edit-block';
+                        edit.disabled = busy || storageError;
+                        edit.setAttribute('aria-label', `Edit ${item.title}, ${item.occurrenceDate}, ${item.start} - ${item.end}`);
+                        edit.append(time, title, description);
+                        edit.addEventListener('click', () => editBlock(item.id, item.occurrenceDate));
+                        cell.addEventListener('click', event => {
+                            if (!event.target.closest('button')) editBlock(item.id, item.occurrenceDate);
+                        });
+                        cell.append(edit, remove);
                     }
                     row.append(cell);
                 }
@@ -1172,6 +1226,154 @@
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) updateCurrentTime();
         });
+
+        function cancelEditing() {
+            editing = null;
+            submitEvent.textContent = 'Add Event';
+            submitTask.textContent = 'Suggest times';
+            document.getElementById('cancel-edit').hidden = true;
+            eventForm.reset();
+            document.getElementById('event-date').value = dateKey(new Date());
+            resetTaskForm();
+            eventStatus.textContent = '';
+            taskStatus.textContent = '';
+        }
+        document.getElementById('cancel-edit').addEventListener('click', cancelEditing);
+
+        async function editBlock(id, occurrenceDate) {
+            if (busy || storageError) return;
+            const original = savedEvents.find(entry => entry.id === id);
+            if (!original) return;
+            const revision = session;
+            const group = original.type === 'task'
+                ? savedEvents.filter(entry => entry.type === 'task' && entry.taskId === original.taskId) : [original];
+            let scope = 'one';
+            if (original.repeat || group.length > 1) {
+                const dialog = document.getElementById('edit-dialog');
+                dialog.returnValue = 'cancel';
+                scope = await new Promise(resolve => {
+                    dialog.addEventListener('close', () => resolve(dialog.returnValue), { once: true });
+                    dialog.showModal();
+                });
+                if (!['one', 'all'].includes(scope)) return;
+            }
+            if (session !== revision || busy || storageError) return;
+            cancelEditing();
+            editing = {
+                originals: structuredClone(scope === 'all' ? group : [original]),
+                occurrenceDate, occurrenceOnly: original.repeat && scope === 'one',
+                wholeTask: original.type === 'task' && scope === 'all', revision
+            };
+            document.getElementById('cancel-edit').hidden = false;
+            if (original.type === 'task') {
+                activateTab(document.getElementById('task-tab'));
+                document.getElementById('task-title').value = original.title;
+                document.getElementById('task-duration').value = editing.originals.reduce((sum, entry) =>
+                    sum + toMinutes(entry.end) - toMinutes(entry.start), 0) / 60;
+                document.getElementById('task-deadline').value = original.deadline;
+                document.getElementById('task-priority').value = original.priority;
+                document.getElementById('task-flexible').checked = editing.originals.length > 1;
+                updateTaskSplit();
+                document.getElementById('task-minimum').value = original.minBlockMinutes / 60;
+                updateTaskSplit();
+                submitTask.textContent = 'Update task';
+                taskStatus.textContent = 'Edit the fields, then press Update task to choose new times. Existing blocks stay until you select an option.';
+                document.getElementById('task-title').focus();
+            } else {
+                activateTab(document.getElementById('event-tab'));
+                document.getElementById('event-title').value = original.title;
+                document.getElementById('event-date').value = editing.occurrenceOnly ? occurrenceDate : original.date;
+                document.getElementById('event-time').value = original.start;
+                document.getElementById('event-end').value = original.end;
+                document.getElementById('event-repeat').checked = original.repeat && !editing.occurrenceOnly;
+                submitEvent.textContent = 'Update event';
+                eventStatus.textContent = 'Edit the fields and press Update event. The original stays until the update is saved.';
+                document.getElementById('event-title').focus();
+            }
+        }
+
+        function withoutEdited(events, context, verify = false) {
+            if (verify) {
+                if (context.wholeTask) {
+                    const group = events.filter(entry => entry.type === 'task' && entry.taskId === context.originals[0].taskId);
+                    if (group.length !== context.originals.length) throw new Error('The task changed on another device. Reopen it before updating.');
+                }
+                for (const original of context.originals) {
+                    const latest = events.find(entry => entry.id === original.id);
+                    if (!latest || !sameEvent(latest, original)) throw new Error('This block changed or was deleted on another device. Reopen it before updating.');
+                }
+            }
+            return events.flatMap(entry => {
+                if (!context.originals.some(original => original.id === entry.id)) return [entry];
+                return context.occurrenceOnly
+                    ? [{ ...entry, excludedDates: [...new Set([...(entry.excludedDates || []), context.occurrenceDate])] }]
+                    : [];
+            });
+        }
+
+        async function updateEntries(entries, status, context) {
+            if (context !== editing || context.revision !== session) return false;
+            const revision = session;
+            const signedIn = Boolean(currentUser);
+            const uid = currentUser?.uid;
+            const pending = pendingEvents.filter(entry => !context.originals.some(original =>
+                original.id === entry.id || sameEvent(original, entry)));
+            const replace = events => {
+                const remaining = withoutEdited(events, context, true);
+                mergeEvents([...remaining, ...pending], entries);
+                return mergeEvents(remaining, entries);
+            };
+            busy = true;
+            updateControls();
+            status.textContent = 'Updating... The original remains until saving is confirmed.';
+            setSaveStatus('pending', signedIn ? 'Updating in cloud... Waiting for confirmation.' : 'Updating in this browser...');
+            const waiting = setTimeout(() => {
+                if (session === revision) setSaveStatus('pending', 'Still waiting for update confirmation. Keep this page open; the original is still displayed.');
+            }, 15000);
+            try {
+                validateEvents(entries, true);
+                let confirmed;
+                if (signedIn) {
+                    if (!navigator.onLine) throw new Error('You are offline.');
+                    confirmed = await cloud.saveEvents(uid, existing => replace(validateEvents(existing, true)));
+                } else {
+                    confirmed = replace(savedEvents);
+                    backupEvents(confirmed, pending);
+                }
+                if (session !== revision) return false;
+                savedEvents = confirmed;
+                pendingEvents = pending;
+                if (signedIn) cloudLoaded = true;
+                renderSchedule();
+                setSaveStatus(signedIn && !pending.length ? 'saved' : 'local', signedIn
+                    ? `Update saved to cloud.${pending.length ? ' Other additions are not synced. Use Retry sync.' : ''}`
+                    : 'Updated on this device only - not synced.');
+                if (signedIn) {
+                    try {
+                        backupEvents();
+                    } catch (error) {
+                        console.error('Unable to back up update:', error);
+                        setSaveStatus('local', 'Update saved to cloud, but the browser backup could not be updated. Check browser storage.');
+                    }
+                }
+                cancelEditing();
+                status.textContent = 'Updated.';
+                return true;
+            } catch (error) {
+                console.error('Schedule update failed:', error);
+                if (session === revision) {
+                    status.textContent = `Update not confirmed. Your edits have been kept. ${cloudError(error)}`;
+                    setSaveStatus('error', 'Update not confirmed. The original is still displayed. Check the form error; refresh before retrying if cloud confirmation was lost.');
+                }
+                return false;
+            } finally {
+                clearTimeout(waiting);
+                if (session === revision) {
+                    busy = false;
+                    updateControls();
+                }
+            }
+        }
 
         async function deleteBlock(id, occurrenceDate) {
             if (busy || storageError) return;
@@ -1224,6 +1426,7 @@
                 if (session !== revision) return;
                 savedEvents = confirmed;
                 pendingEvents = nextPending;
+                if (editing?.originals.some(entry => entry.id === id)) cancelEditing();
                 taskOptions.replaceChildren();
                 taskStatus.textContent = '';
                 if (signedIn) cloudLoaded = true;
@@ -1265,6 +1468,20 @@
             };
             if (!validEvent(entry)) {
                 eventStatus.textContent = 'Enter a title, a valid date, and an end time later than the start time on the same day.';
+                return;
+            }
+            if (editing && editing.originals[0].type !== 'task') {
+                const context = editing;
+                const original = context.originals[0];
+                if (entry.repeat && original.excludedDates && !context.occurrenceOnly) {
+                    const offset = (Date.parse(`${entry.date}T00:00:00Z`) - Date.parse(`${original.date}T00:00:00Z`)) / 86400000;
+                    entry.excludedDates = original.excludedDates.map(key => {
+                        const date = new Date(`${key}T00:00:00`);
+                        date.setDate(date.getDate() + offset);
+                        return dateKey(date);
+                    });
+                }
+                await updateEntries([entry], eventStatus, context);
                 return;
             }
             if (await saveEntries([entry], eventStatus)) showAddedEvent(entry);
@@ -1383,7 +1600,8 @@
         }
 
         function suggestTaskSchedules(now, deadline, duration, minimum, split) {
-            const events = [...savedEvents, ...pendingEvents];
+            const events = editing?.originals[0].type === 'task'
+                ? withoutEdited([...savedEvents, ...pendingEvents], editing) : [...savedEvents, ...pendingEvents];
             const maxBlocks = 1000 - events.length;
             const weeklyBounds = new Map();
             function longestFrom(key) {
@@ -1468,9 +1686,10 @@
                 taskStatus.textContent = 'Enter a title, a deadline today or later, and a duration in half-hour steps.';
                 return;
             }
+            const context = editing?.originals[0].type === 'task' ? editing : null;
             const options = suggestTaskSchedules(now, deadline, totalMinutes, minimum, split);
             taskStatus.textContent = options.length
-                ? `${options.length} ${options.length === 1 ? 'option' : 'options'} found. Choose one to add your task.`
+                ? `${options.length} ${options.length === 1 ? 'option' : 'options'} found. Choose one to ${context ? 'update' : 'add'} your task.`
                 : 'No available options before the deadline within 08:00-22:00. Extend the deadline, reduce the duration, or allow shorter split blocks.';
             options.forEach(blocks => {
                 const option = document.createElement('li');
@@ -1480,24 +1699,25 @@
                 choose.textContent = blocks.map(label).join('\n');
                 choose.addEventListener('click', async () => {
                     if (busy || storageError) return;
+                    if (context && context !== editing) return;
                     if (new Date(`${blocks[0].date}T${blocks[0].start}`) < new Date()) {
                         taskOptions.replaceChildren();
                         taskStatus.textContent = 'These times have passed. Suggest times again for fresh options.';
                         return;
                     }
                     const revision = session;
-                    const taskId = crypto.randomUUID();
+                    const taskId = context && !context.wholeTask ? context.originals[0].taskId : crypto.randomUUID();
                     const entries = blocks.map(block => ({
                         ...block, id: crypto.randomUUID(), type: 'task', taskId, title, repeat: false,
                         deadline, priority, minBlockMinutes: minimum
                     }));
-                    const added = await saveEntries(entries, taskStatus);
+                    const added = context ? await updateEntries(entries, taskStatus, context) : await saveEntries(entries, taskStatus);
                     if (session !== revision) return;
                     if (added) {
                         taskOptions.replaceChildren();
                         const shown = entries.find(entry => [...document.querySelectorAll('.day-date')].some(label =>
                             occursOn(entry, new Date(`${label.dateTime}T00:00:00`))));
-                        taskStatus.textContent = `Task added${entries.length > 1 ? ` in ${entries.length} blocks` : ''}.${shown ? '' : ' Its dates are outside the displayed week.'}`;
+                        taskStatus.textContent = `Task ${context ? 'updated' : 'added'}${entries.length > 1 ? ` in ${entries.length} blocks` : ''}.${shown ? '' : ' Its dates are outside the displayed week.'}`;
                         if (shown) focusTime(toMinutes(shown.start));
                     } else if (pendingEvents.some(entry => entry.taskId === taskId)) {
                         taskOptions.replaceChildren();
@@ -1600,6 +1820,7 @@
 
         async function accountChanged(user) {
             const revision = ++session;
+            cancelEditing();
             scrollController?.abort();
             authStatus.textContent = '';
             eventStatus.textContent = '';
