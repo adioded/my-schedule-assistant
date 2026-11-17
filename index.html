@@ -946,6 +946,194 @@
             color: #735e67;
         }
 
+        @media (min-width: 769px) {
+            .top-bar,
+            .content-wrapper {
+                grid-template-columns: minmax(0, 1fr) 380px;
+                gap: 16px;
+            }
+
+            .sidebar-panel {
+                padding: 12px;
+                font-size: 0.85rem;
+            }
+
+            .form-tabs {
+                padding: 3px;
+                margin-bottom: 8px;
+            }
+
+            .form-tabs button {
+                padding: 6px;
+            }
+
+            .sidebar-panel .form-group,
+            #task-panel .form-group {
+                margin-bottom: 6px;
+            }
+
+            .sidebar-panel .form-row {
+                gap: 8px;
+            }
+
+            .sidebar-panel label,
+            .sidebar-panel .label-heading {
+                margin-bottom: 3px;
+            }
+
+            .sidebar-panel input:not([type="hidden"]):not([type="checkbox"]):not([type="range"]),
+            #task-panel select {
+                padding: 5px 6px;
+                min-height: 30px;
+                font-size: 0.85rem;
+            }
+
+            .label-options {
+                gap: 3px;
+                margin-top: 3px;
+            }
+
+            .label-options button {
+                padding: 2px 5px;
+            }
+
+            .label-chip > button[aria-pressed] {
+                min-width: 40px;
+                padding-right: 20px;
+            }
+
+            .label-add {
+                width: 20px;
+                height: 20px;
+                font-size: 16px;
+            }
+
+            .sidebar-panel button[type="submit"] {
+                padding: 7px 10px;
+                margin-top: 4px !important;
+            }
+
+            .sidebar-panel .checkbox-group {
+                margin-bottom: 6px;
+            }
+
+            .sidebar-panel .schedule-note {
+                font-size: 0.8rem;
+            }
+
+            #labels-status {
+                margin: 4px 0;
+            }
+        }
+
+        @media (min-width: 769px) and (max-height: 850px) {
+            body {
+                padding: 12px;
+            }
+
+            .container {
+                height: calc(100dvh - 24px);
+                gap: 12px;
+            }
+
+            .top-bar,
+            .content-wrapper {
+                grid-template-columns: minmax(0, 1fr) 520px;
+            }
+
+            .account-panel {
+                padding: 8px 12px;
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            #auth-status {
+                flex-basis: 100%;
+            }
+
+            header {
+                padding: 10px 16px;
+            }
+
+            h1 {
+                font-size: 1.6rem;
+            }
+
+            #cancel-edit {
+                position: absolute;
+                top: 15px;
+                right: 12px;
+                padding: 4px 8px;
+                font-size: 0.8rem;
+            }
+
+            .sidebar-panel {
+                position: relative;
+            }
+
+            .sidebar-panel:has(#cancel-edit:not([hidden])) .form-tabs {
+                margin-right: 68px;
+            }
+
+            .sidebar-panel .schedule-note:not(:empty) {
+                margin-top: 4px !important;
+            }
+
+            #event-panel,
+            #task-panel {
+                display: grid;
+                column-gap: 8px;
+                align-items: start;
+            }
+
+            #event-panel {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #event-panel > *,
+            #task-panel > * {
+                grid-column: 1 / -1;
+            }
+
+            #event-panel > .form-group:has(#event-date),
+            #event-panel > .checkbox-group {
+                grid-column: 1;
+            }
+
+            #event-panel > .form-row:has(#event-time),
+            #event-panel > button[type="submit"] {
+                grid-column: 2;
+            }
+
+            #task-panel {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            #task-panel > .form-row:has(#task-duration),
+            #task-panel > .form-row:has(#task-priority) {
+                display: contents;
+            }
+
+            #task-panel .form-group:has(#task-duration),
+            #task-panel .checkbox-group {
+                grid-column: 1;
+            }
+
+            #task-panel .form-group:has(#task-deadline) {
+                grid-column: 2 / span 2;
+            }
+
+            #task-panel .form-group:has(#task-priority) {
+                grid-column: 4;
+            }
+
+            #task-split-options {
+                grid-column: 2 / -1;
+            }
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 12px;
