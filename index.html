@@ -478,8 +478,26 @@
         .slot-label {
             padding: 1px 5px;
             border-radius: 5px;
-            background: rgba(255, 255, 255, 0.6);
-            color: #783e53;
+            background: var(--label-background);
+            color: var(--label-color);
+        }
+
+        .subject-labels,
+        .subject-label {
+            --label-background: #e5eee2;
+            --label-color: #355744;
+            --label-border: #adc2a6;
+            --label-hover: #d3e2ce;
+            --label-selected: #496b4f;
+        }
+
+        .type-labels,
+        .type-label {
+            --label-background: #fff0cc;
+            --label-color: #775019;
+            --label-border: #d9b866;
+            --label-hover: #f5dfaa;
+            --label-selected: #91611c;
         }
 
         .slot-time {
@@ -551,10 +569,10 @@
 
         .label-options button {
             padding: 3px 6px;
-            border: 1px solid #dfc5cc;
+            border: 1px solid var(--label-border);
             border-radius: 6px;
-            background: #f9e9ee;
-            color: #783e53;
+            background: var(--label-background);
+            color: var(--label-color);
             box-shadow: none;
             font-size: 0.7rem;
             overflow-wrap: anywhere;
@@ -564,11 +582,11 @@
         .label-options button:hover {
             transform: none;
             box-shadow: none;
-            background: #efd8de;
+            background: var(--label-hover);
         }
 
         .label-options button[aria-pressed="true"] {
-            background: #95475d;
+            background: var(--label-selected);
             color: white;
         }
 
@@ -697,7 +715,8 @@
             white-space: pre-line;
         }
 
-        label {
+        label,
+        .label-heading {
             display: block;
             font-weight: 500;
             color: #783e53;
@@ -942,14 +961,14 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="event-subject">Subject</label>
-                            <input type="text" id="event-subject" placeholder="Choose or type a label" maxlength="100">
-                            <div id="event-subject-options" class="label-options" role="group" aria-label="Suggested event subjects"></div>
+                            <span id="event-subject-heading" class="label-heading">Subject</span>
+                            <input type="hidden" id="event-subject">
+                            <div id="event-subject-options" class="label-options subject-labels" role="group" aria-labelledby="event-subject-heading"></div>
                         </div>
                         <div class="form-group">
-                            <label for="event-type-label">Type</label>
-                            <input type="text" id="event-type-label" placeholder="Choose or type a label" maxlength="100">
-                            <div id="event-type-label-options" class="label-options" role="group" aria-label="Suggested event types"></div>
+                            <span id="event-type-label-heading" class="label-heading">Type</span>
+                            <input type="hidden" id="event-type-label">
+                            <div id="event-type-label-options" class="label-options type-labels" role="group" aria-labelledby="event-type-label-heading"></div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -982,14 +1001,14 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="task-subject">Subject</label>
-                            <input type="text" id="task-subject" placeholder="Choose or type a label" maxlength="100">
-                            <div id="task-subject-options" class="label-options" role="group" aria-label="Suggested task subjects"></div>
+                            <span id="task-subject-heading" class="label-heading">Subject</span>
+                            <input type="hidden" id="task-subject">
+                            <div id="task-subject-options" class="label-options subject-labels" role="group" aria-labelledby="task-subject-heading"></div>
                         </div>
                         <div class="form-group">
-                            <label for="task-type-label">Type</label>
-                            <input type="text" id="task-type-label" placeholder="Choose or type a label" maxlength="100">
-                            <div id="task-type-label-options" class="label-options" role="group" aria-label="Suggested task types"></div>
+                            <span id="task-type-label-heading" class="label-heading">Type</span>
+                            <input type="hidden" id="task-type-label">
+                            <div id="task-type-label-options" class="label-options type-labels" role="group" aria-labelledby="task-type-label-heading"></div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -1112,17 +1131,7 @@
             for (const [field, suggestions] of Object.entries(labelSuggestions)) {
                 const input = document.getElementById(`${prefix}-${field}`);
                 const options = document.getElementById(`${prefix}-${field}-options`);
-                suggestions.forEach(label => {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.textContent = label;
-                    button.setAttribute('aria-pressed', 'false');
-                    button.addEventListener('click', () => {
-                        input.value = input.value === label ? '' : label;
-                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                    });
-                    options.append(button);
-                });
+                suggestions.forEach(label => appendLabelButton(input, options, label));
             }
             const form = document.getElementById(`${prefix}-panel`);
             form.addEventListener('input', event => {
@@ -1132,14 +1141,40 @@
                 }
                 updateLabelButtons();
             });
-            form.addEventListener('reset', () => queueMicrotask(updateLabelButtons));
+            form.addEventListener('reset', () => {
+                for (const field of Object.keys(labelSuggestions)) {
+                    document.getElementById(`${prefix}-${field}`).value = '';
+                }
+                queueMicrotask(updateLabelButtons);
+            });
+        }
+
+        function appendLabelButton(input, options, label, custom = false) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = label;
+            button.setAttribute('aria-pressed', 'false');
+            if (custom) button.dataset.custom = 'true';
+            button.addEventListener('click', () => {
+                input.value = input.value === label ? '' : label;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            options.append(button);
         }
 
         function updateLabelButtons() {
             for (const prefix of ['event', 'task']) {
                 for (const field of Object.keys(labelSuggestions)) {
-                    const value = document.getElementById(`${prefix}-${field}`).value.trim();
-                    document.querySelectorAll(`#${prefix}-${field}-options button`).forEach(button => {
+                    const input = document.getElementById(`${prefix}-${field}`);
+                    const value = input.value.trim();
+                    const options = document.getElementById(`${prefix}-${field}-options`);
+                    options.querySelectorAll('button[data-custom]').forEach(button => {
+                        if (button.textContent !== value) button.remove();
+                    });
+                    if (value && ![...options.querySelectorAll('button')].some(button => button.textContent === value)) {
+                        appendLabelButton(input, options, value, true);
+                    }
+                    options.querySelectorAll('button').forEach(button => {
                         button.setAttribute('aria-pressed', String(button.textContent === value));
                     });
                 }
@@ -1434,9 +1469,10 @@
                         title.textContent = item.title;
                         const labels = document.createElement('div');
                         labels.className = 'slot-labels';
-                        [item.subject, item.typeLabel].filter(Boolean).forEach(label => {
+                        [[item.subject, 'subject-label'], [item.typeLabel, 'type-label']].forEach(([label, kind]) => {
+                            if (!label) return;
                             const badge = document.createElement('span');
-                            badge.className = 'slot-label';
+                            badge.className = `slot-label ${kind}`;
                             badge.textContent = label;
                             labels.append(badge);
                         });
