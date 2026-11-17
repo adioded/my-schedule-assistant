@@ -500,6 +500,15 @@
             --label-selected: #6b6054;
         }
 
+        .number-labels,
+        .number-label {
+            --label-background: #e9e7ed;
+            --label-color: #514b5d;
+            --label-border: #c2bbcd;
+            --label-hover: #dbd6e3;
+            --label-selected: #665e73;
+        }
+
         .slot-time {
             display: block;
             font-size: 0.8em;
@@ -1091,7 +1100,7 @@
                 <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
                         <label for="event-title">Title</label>
-                        <input type="text" id="event-title" placeholder="Subject - Type" maxlength="203" required>
+                        <input type="text" id="event-title" placeholder="Subject - Type 3" maxlength="304" required>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -1104,6 +1113,11 @@
                             <input type="hidden" id="event-type-label">
                             <div id="event-type-label-options" class="label-options type-labels" role="group" aria-labelledby="event-type-label-heading"></div>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <span id="event-number-label-heading" class="label-heading">Number</span>
+                        <input type="hidden" id="event-number-label">
+                        <div id="event-number-label-options" class="label-options number-labels" role="group" aria-labelledby="event-number-label-heading"></div>
                     </div>
                     <div class="form-group">
                         <label for="event-date">Date</label>
@@ -1131,7 +1145,7 @@
                 <form id="task-panel" role="tabpanel" aria-labelledby="task-tab" hidden>
                     <div class="form-group">
                         <label for="task-title">Title</label>
-                        <input type="text" id="task-title" placeholder="Subject - Type" maxlength="203" required>
+                        <input type="text" id="task-title" placeholder="Subject - Type 3" maxlength="304" required>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -1144,6 +1158,11 @@
                             <input type="hidden" id="task-type-label">
                             <div id="task-type-label-options" class="label-options type-labels" role="group" aria-labelledby="task-type-label-heading"></div>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <span id="task-number-label-heading" class="label-heading">Number</span>
+                        <input type="hidden" id="task-number-label">
+                        <div id="task-number-label-options" class="label-options number-labels" role="group" aria-labelledby="task-number-label-heading"></div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -1271,8 +1290,10 @@
 
         const labelSuggestions = {
             subject: ['Generative AI', 'Quantum Physics', 'Electrical Circuits', 'Electrical Lab 1b', 'Random Signals', 'Soccer'],
-            'type-label': ['Lecture', 'Tutorial', 'Workshop', 'Assignment', 'Preparation']
+            'type-label': ['Lecture', 'Tutorial', 'Workshop', 'Assignment', 'Preparation'],
+            'number-label': Array.from({ length: 14 }, (_, number) => String(number))
         };
+        const labelNames = { subject: 'subject', 'type-label': 'type', 'number-label': 'number' };
         const labelsKey = 'schedule-assistant-labels-v1';
         let labelChoices = validateLabels(null);
         let labelsReady = false;
@@ -1288,7 +1309,7 @@
                 add.type = 'button';
                 add.className = 'label-add';
                 add.textContent = '+';
-                add.setAttribute('aria-label', `Add ${field === 'subject' ? 'subject' : 'type'}`);
+                add.setAttribute('aria-label', `Add ${labelNames[field]}`);
                 add.setAttribute('aria-controls', 'label-dialog');
                 add.setAttribute('aria-expanded', 'false');
                 add.setAttribute('aria-haspopup', 'dialog');
@@ -1297,8 +1318,9 @@
                     closeLabelEditor(false);
                     labelOpener = add;
                     labelField = field;
-                    document.getElementById('label-dialog-heading').textContent = `Add ${field === 'subject' ? 'subject' : 'type'}`;
+                    document.getElementById('label-dialog-heading').textContent = `Add ${labelNames[field]}`;
                     document.getElementById('label-name').value = '';
+                    document.getElementById('label-name').inputMode = field === 'number-label' ? 'numeric' : 'text';
                     document.getElementById('label-dialog-status').textContent =
                         labelsStatus.textContent || (busy || !labelsReady ? 'Loading labels...' : storageError ? 'Browser storage unavailable.' : '');
                     labelDialog.hidden = false;
@@ -1314,15 +1336,19 @@
             }
             const form = document.getElementById(`${prefix}-panel`);
             form.addEventListener('input', event => {
-                if (event.target.id === `${prefix}-subject` || event.target.id === `${prefix}-type-label`) {
+                if (Object.keys(labelSuggestions).some(field => event.target.id === `${prefix}-${field}`)) {
                     const labels = readLabels(prefix);
-                    document.getElementById(`${prefix}-title`).value = [labels.subject, labels.typeLabel].filter(Boolean).join(' - ');
+                    document.getElementById(`${prefix}-title`).value =
+                        [[labels.subject, labels.typeLabel].filter(Boolean).join(' - '), labels.numberLabel].filter(Boolean).join(' ');
                 } else if (event.target.id === `${prefix}-title`) {
                     const title = event.target.value;
-                    const subject = document.getElementById(`${prefix}-subject`);
-                    const type = document.getElementById(`${prefix}-type-label`);
-                    if (subject.value && title.trim() !== subject.value && !title.trimStart().startsWith(`${subject.value} - `)) subject.value = '';
-                    if (type.value && title.trim() !== type.value && !title.trimEnd().endsWith(` - ${type.value}`)) type.value = '';
+                    for (const field of Object.keys(labelSuggestions)) {
+                        const input = document.getElementById(`${prefix}-${field}`);
+                        const present = field === 'number-label'
+                            ? new RegExp(`(^|\\D)${input.value}(?=\\D|$)`).test(title)
+                            : title.includes(input.value);
+                        if (input.value && !present) input.value = '';
+                    }
                 }
                 updateLabelButtons();
             });
@@ -1382,7 +1408,7 @@
             remove.type = 'button';
             remove.className = 'label-remove';
             remove.textContent = '\u00d7';
-            remove.setAttribute('aria-label', `Delete ${field === 'subject' ? 'subject' : 'type'}: ${label}`);
+            remove.setAttribute('aria-label', `Delete ${labelNames[field]}: ${label}`);
             remove.title = remove.getAttribute('aria-label');
             remove.disabled = busy || storageError || !labelsReady;
             remove.addEventListener('click', () => changeLabel(field, label, true));
@@ -1412,17 +1438,23 @@
         }
 
         function validateLabels(value) {
-            const choices = value === null ? labelSuggestions : value;
+            const choices = value === null ? labelSuggestions
+                : value && typeof value === 'object' && !Array.isArray(value)
+                    ? { 'number-label': labelSuggestions['number-label'], ...value } : null;
             if (!choices || typeof choices !== 'object'
-                || Object.keys(choices).length !== 2
+                || Object.keys(choices).length !== 3
                 || !Object.keys(labelSuggestions).every(field => Array.isArray(choices[field])
                     && choices[field].length <= 100
                     && choices[field].every(label => typeof label === 'string'
-                        && label.length > 0 && label.length <= 100 && label === label.trim())
+                        && label.length > 0 && label.length <= 100 && label === label.trim()
+                        && (field !== 'number-label' || /^(0|[1-9]\d*)$/.test(label)))
                     && new Set(choices[field].map(label => label.toLowerCase())).size === choices[field].length)) {
                 throw new Error('Saved label choices have an invalid format.');
             }
-            return { subject: [...choices.subject], 'type-label': [...choices['type-label']] };
+            return {
+                subject: [...choices.subject], 'type-label': [...choices['type-label']],
+                'number-label': [...choices['number-label']]
+            };
         }
 
         function loadLabelBackup() {
@@ -1467,6 +1499,10 @@
             if (busy || storageError || !labelsReady) return;
             if (!label || label.length > 100) {
                 labelsStatus.textContent = 'Use 1-100 characters.';
+                return;
+            }
+            if (field === 'number-label' && !/^(0|[1-9]\d*)$/.test(label)) {
+                labelsStatus.textContent = 'Enter a whole number, 0 or greater.';
                 return;
             }
             const revision = session;
@@ -1525,7 +1561,11 @@
         function readLabels(prefix) {
             const subject = document.getElementById(`${prefix}-subject`).value.trim();
             const typeLabel = document.getElementById(`${prefix}-type-label`).value.trim();
-            return { ...(subject ? { subject } : {}), ...(typeLabel ? { typeLabel } : {}) };
+            const numberLabel = document.getElementById(`${prefix}-number-label`).value.trim();
+            return {
+                ...(subject ? { subject } : {}), ...(typeLabel ? { typeLabel } : {}),
+                ...(numberLabel ? { numberLabel } : {})
+            };
         }
 
         function setSaveStatus(state, message) {
@@ -1593,6 +1633,8 @@
                 || typeof event.repeat !== 'boolean') return false;
             if (!['subject', 'typeLabel'].every(key => event[key] === undefined
                 || (typeof event[key] === 'string' && event[key].length <= 100))) return false;
+            if (event.numberLabel !== undefined && (typeof event.numberLabel !== 'string'
+                || event.numberLabel.length > 100 || !/^(0|[1-9]\d*)$/.test(event.numberLabel))) return false;
             if (event.excludedDates !== undefined && (!event.repeat
                 || !Array.isArray(event.excludedDates)
                 || new Set(event.excludedDates).size !== event.excludedDates.length
@@ -1714,7 +1756,7 @@
         }
 
         function sameEvent(first, second) {
-            return ['title', 'subject', 'typeLabel', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes', 'maxBlockMinutes']
+            return ['title', 'subject', 'typeLabel', 'numberLabel', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes', 'maxBlockMinutes']
                 .every(key => first[key] === second[key])
                 && JSON.stringify([...(first.excludedDates || [])].sort()) === JSON.stringify([...(second.excludedDates || [])].sort());
         }
@@ -1809,7 +1851,7 @@
                         block.classList.add('time-slot', item.type);
                         block.dataset.start = toMinutes(item.start);
                         block.dataset.end = toMinutes(item.end);
-                        const labelText = [item.subject, item.typeLabel].filter(Boolean).join(' / ');
+                        const labelText = [item.subject, item.typeLabel, item.numberLabel].filter(Boolean).join(' / ');
                         block.title = `${item.title}: ${item.start} - ${item.end}${labelText ? ` - ${labelText}` : ''}${item.description ? ` (${item.description})` : ''}`;
                         const time = document.createElement('span');
                         time.className = 'slot-time';
@@ -1819,7 +1861,7 @@
                         title.textContent = item.title;
                         const labels = document.createElement('div');
                         labels.className = 'slot-labels';
-                        [[item.subject, 'subject-label'], [item.typeLabel, 'type-label']].forEach(([label, kind]) => {
+                        [[item.subject, 'subject-label'], [item.typeLabel, 'type-label'], [item.numberLabel, 'number-label']].forEach(([label, kind]) => {
                             if (!label) return;
                             const badge = document.createElement('span');
                             badge.className = `slot-label ${kind}`;
@@ -1910,6 +1952,7 @@
             const prefix = original.type === 'task' ? 'task' : 'event';
             document.getElementById(`${prefix}-subject`).value = original.subject || '';
             document.getElementById(`${prefix}-type-label`).value = original.typeLabel || '';
+            document.getElementById(`${prefix}-number-label`).value = original.numberLabel || '';
             updateLabelButtons();
             document.getElementById('cancel-edit').hidden = false;
             if (original.type === 'task') {
@@ -2133,10 +2176,13 @@
                         return dateKey(date);
                     });
                 }
-                await updateEntries([entry], eventStatus, context);
+                if (await updateEntries([entry], eventStatus, context)) eventForm.reset();
                 return;
             }
-            if (await saveEntries([entry], eventStatus)) showAddedEvent(entry);
+            if (await saveEntries([entry], eventStatus)) {
+                eventForm.reset();
+                showAddedEvent(entry);
+            }
         });
 
         async function saveEntries(entries, status) {
@@ -2417,7 +2463,8 @@
                     const added = context ? await updateEntries(entries, taskStatus, context) : await saveEntries(entries, taskStatus);
                     if (session !== revision) return;
                     if (added) {
-                        taskOptions.replaceChildren();
+                        resetTaskForm();
+                        document.getElementById('task-deadline').value = '';
                         const shown = entries.find(entry => [...document.querySelectorAll('.day-date')].some(label =>
                             occursOn(entry, new Date(`${label.dateTime}T00:00:00`))));
                         taskStatus.textContent = `Task ${context ? 'updated' : 'added'}${entries.length > 1 ? ` (${entries.length} blocks)` : ''}.${shown ? '' : ' Outside this week.'}`;
