@@ -551,7 +551,8 @@
             min-width: 0;
         }
 
-        #task-minimum {
+        #task-minimum,
+        #task-maximum {
             width: 100%;
             accent-color: #95475d;
         }
@@ -873,6 +874,10 @@
                             <label for="task-minimum">Minimum block: <output id="task-minimum-label" for="task-minimum">1 hour</output></label>
                             <input type="range" id="task-minimum" min="0.5" max="1" step="0.5" value="1">
                         </div>
+                        <div class="form-group">
+                            <label for="task-maximum">Maximum block: <output id="task-maximum-label" for="task-maximum">1 hour</output></label>
+                            <input type="range" id="task-maximum" min="0.5" max="1" step="0.5" value="1">
+                        </div>
                     </fieldset>
                     <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Suggest times</button>
                     <p class="schedule-note" style="margin-top: 8px;">Available hours: 08:00-22:00. Choose an option to save.</p>
@@ -1027,7 +1032,10 @@
                 && validDate(event.deadline) && event.date <= event.deadline
                 && Number.isInteger(event.minBlockMinutes) && event.minBlockMinutes >= 30
                 && event.minBlockMinutes <= 1440 && event.minBlockMinutes % 30 === 0
-                && duration % 30 === 0 && duration >= event.minBlockMinutes;
+                && duration % 30 === 0 && duration >= event.minBlockMinutes
+                && (event.maxBlockMinutes === undefined || (Number.isSafeInteger(event.maxBlockMinutes)
+                    && event.maxBlockMinutes >= event.minBlockMinutes && event.maxBlockMinutes % 30 === 0
+                    && duration <= event.maxBlockMinutes));
         }
 
         function validateEvents(events, requireIds = false) {
@@ -1125,7 +1133,7 @@
         }
 
         function sameEvent(first, second) {
-            return ['title', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes']
+            return ['title', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes', 'maxBlockMinutes']
                 .every(key => first[key] === second[key])
                 && JSON.stringify([...(first.excludedDates || [])].sort()) === JSON.stringify([...(second.excludedDates || [])].sort());
         }
@@ -1317,6 +1325,10 @@
                 document.getElementById('task-flexible').checked = editing.originals.length > 1;
                 updateTaskSplit();
                 document.getElementById('task-minimum').value = original.minBlockMinutes / 60;
+                if (original.maxBlockMinutes !== undefined) {
+                    document.getElementById('task-maximum').dataset.custom = 'true';
+                    document.getElementById('task-maximum').value = original.maxBlockMinutes / 60;
+                }
                 updateTaskSplit();
                 submitTask.textContent = 'Update task';
                 taskStatus.textContent = 'Edit the fields, then press Update task to choose new times. Existing blocks stay until you select an option.';
@@ -1585,16 +1597,26 @@
             taskSplitOptions.disabled = !split || busy || storageError || !validDuration;
             const minimum = Number(slider.value);
             document.getElementById('task-minimum-label').textContent = `${minimum} ${minimum === 1 ? 'hour' : 'hours'}`;
+            const maximumSlider = document.getElementById('task-maximum');
+            maximumSlider.max = slider.max;
+            maximumSlider.min = slider.value;
+            maximumSlider.value = maximumSlider.dataset.custom
+                ? String(Math.max(minimum, Math.min(Number(maximumSlider.value), Number(maximumSlider.max))))
+                : slider.max;
+            const maximum = Number(maximumSlider.value);
+            document.getElementById('task-maximum-label').textContent = `${maximum} ${maximum === 1 ? 'hour' : 'hours'}`;
         }
 
         function resetTaskForm() {
             taskForm.reset();
+            delete document.getElementById('task-maximum').dataset.custom;
             taskOptions.replaceChildren();
             document.getElementById('task-deadline').value = dateKey(new Date());
             updateTaskSplit();
         }
 
-        function taskSettingsChanged() {
+        function taskSettingsChanged(event) {
+            if (event.target.id === 'task-maximum') document.getElementById('task-maximum').dataset.custom = 'true';
             updateTaskSplit();
             taskOptions.replaceChildren();
             taskStatus.textContent = '';
@@ -1641,7 +1663,7 @@
             }
         }
 
-        function suggestTaskSchedules(now, deadline, duration, minimum, split) {
+        function suggestTaskSchedules(now, deadline, duration, minimum, split, maximum = duration) {
             const events = editing?.originals[0].type === 'task'
                 ? withoutEdited([...savedEvents, ...pendingEvents], editing) : [...savedEvents, ...pendingEvents];
             const maxBlocks = 1000 - events.length;
@@ -1664,6 +1686,8 @@
                 return weeklyBounds.get(boundKey);
             }
             function canFit(remaining, count, longest) {
+                if (remaining === 0) return true;
+                longest = Math.min(longest, maximum);
                 const needed = Math.ceil(remaining / longest);
                 return minimum <= longest && needed <= count && needed * minimum <= remaining;
             }
@@ -1695,6 +1719,26 @@
                         if (!canFit(remaining, maxBlocks - blocks.length, longest)) break;
                         const blockStart = next === index ? start : window.start;
                         let length = Math.min(window.end - blockStart, remaining);
+                        if (split && maximum < duration) {
+                            for (; length >= minimum; length -= 30) {
+                                const count = Math.ceil(length / maximum);
+                                if (count * minimum <= length && count <= maxBlocks - blocks.length
+                                    && canFit(remaining - length, maxBlocks - blocks.length - count, longest)) break;
+                            }
+                            if (length < minimum) continue;
+                            let cursor = blockStart;
+                            let unallocated = length;
+                            let blockCount = Math.ceil(length / maximum);
+                            while (unallocated > 0) {
+                                const blockLength = Math.min(maximum, unallocated - minimum * (blockCount - 1));
+                                blocks.push({ date: window.date, start: formatTime(cursor), end: formatTime(cursor + blockLength) });
+                                cursor += blockLength;
+                                unallocated -= blockLength;
+                                blockCount--;
+                            }
+                            remaining -= length;
+                            continue;
+                        }
                         if (remaining > length && remaining - length < minimum) length -= minimum - (remaining - length);
                         if (length < minimum || length + (maxBlocks - blocks.length - 1) * longest < remaining) continue;
                         blocks.push({ date: window.date, start: formatTime(blockStart), end: formatTime(blockStart + length) });
@@ -1722,17 +1766,23 @@
             const totalMinutes = Number(document.getElementById('task-duration').value) * 60;
             const split = document.getElementById('task-flexible').checked;
             const minimum = split ? Number(document.getElementById('task-minimum').value) * 60 : totalMinutes;
+            const maximum = split ? Number(document.getElementById('task-maximum').value) * 60 : totalMinutes;
             const priority = document.getElementById('task-priority').value;
             if (!title || !validDate(deadline) || deadline < dateKey(now)
                 || !Number.isSafeInteger(totalMinutes) || totalMinutes < 30 || totalMinutes % 30 !== 0) {
                 taskStatus.textContent = 'Enter a title, a deadline today or later, and a duration in half-hour steps.';
                 return;
             }
+            if (split && (!Number.isSafeInteger(minimum) || minimum < 30 || minimum % 30 !== 0
+                || !Number.isSafeInteger(maximum) || maximum % 30 !== 0 || maximum < minimum || maximum > totalMinutes)) {
+                taskStatus.textContent = 'Choose minimum and maximum blocks in half-hour steps, with minimum <= maximum <= duration.';
+                return;
+            }
             const context = editing?.originals[0].type === 'task' ? editing : null;
-            const options = suggestTaskSchedules(now, deadline, totalMinutes, minimum, split);
+            const options = suggestTaskSchedules(now, deadline, totalMinutes, minimum, split, maximum);
             taskStatus.textContent = options.length
                 ? `${options.length} ${options.length === 1 ? 'option' : 'options'} found. Choose one to ${context ? 'update' : 'add'} your task.`
-                : 'No available options before the deadline within 08:00-22:00. Extend the deadline, reduce the duration, or allow shorter split blocks.';
+                : 'No available options before the deadline within 08:00-22:00. Extend the deadline, reduce the duration, or adjust the minimum and maximum block lengths.';
             options.forEach(blocks => {
                 const option = document.createElement('li');
                 const label = block => `${dateFormatter.format(new Date(`${block.date}T00:00:00`))}, ${block.start} - ${block.end}`;
@@ -1751,7 +1801,7 @@
                     const taskId = context && !context.wholeTask ? context.originals[0].taskId : crypto.randomUUID();
                     const entries = blocks.map(block => ({
                         ...block, id: crypto.randomUUID(), type: 'task', taskId, title, repeat: false,
-                        deadline, priority, minBlockMinutes: minimum
+                        deadline, priority, minBlockMinutes: minimum, maxBlockMinutes: maximum
                     }));
                     const added = context ? await updateEntries(entries, taskStatus, context) : await saveEntries(entries, taskStatus);
                     if (session !== revision) return;
