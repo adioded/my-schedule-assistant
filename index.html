@@ -606,6 +606,73 @@
             box-shadow: none;
             font-size: 18px;
             line-height: 1;
+            transform: none;
+            transition: none;
+        }
+
+        .label-add:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .label-editor {
+            position: fixed;
+            z-index: 20;
+            width: min(250px, calc(100vw - 24px));
+            padding: 12px;
+            border: 1px solid #b6bec7;
+            border-radius: 10px;
+            background: #fffcf9;
+            box-shadow: 0 6px 24px rgba(65, 75, 86, 0.18);
+        }
+
+        .label-editor-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .label-editor h2 {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .label-editor fieldset {
+            display: flex;
+            gap: 6px;
+            border: 0;
+            padding: 0;
+            min-width: 0;
+        }
+
+        .label-editor input {
+            min-width: 0;
+            padding: 6px;
+            font-size: 0.85rem;
+        }
+
+        .label-editor button {
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            transform: none;
+            transition: none;
+        }
+
+        .label-editor .label-close {
+            padding: 0;
+            width: 22px;
+            height: 22px;
+            background: none;
+            color: #414b56;
+            font-size: 18px;
+            box-shadow: none;
+        }
+
+        #label-dialog-status:not(:empty) {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            overflow-wrap: anywhere;
         }
 
         .label-chip {
@@ -1139,18 +1206,19 @@
             <button value="cancel" autofocus>Cancel</button>
         </form>
     </dialog>
-    <dialog id="label-dialog" class="delete-dialog" aria-labelledby="label-dialog-heading">
-        <h2 id="label-dialog-heading">Add label</h2>
+    <div id="label-dialog" class="label-editor" role="dialog" aria-labelledby="label-dialog-heading" hidden>
+        <div class="label-editor-heading">
+            <h2 id="label-dialog-heading">Add label</h2>
+            <button type="button" id="label-cancel" class="label-close" aria-label="Close label editor" title="Close">&#215;</button>
+        </div>
         <form id="label-form">
-            <fieldset id="label-fields" style="border: 0; padding: 12px 0; width: 100%;">
-                <label for="label-name">Label name</label>
-                <input id="label-name" type="text" maxlength="100" required>
-                <p id="label-dialog-status" role="status"></p>
-                <button type="submit">Add label</button>
-                <button type="button" id="label-cancel">Cancel</button>
+            <fieldset id="label-fields">
+                <input id="label-name" type="text" aria-label="Label name" placeholder="Name" maxlength="100" required>
+                <button type="submit">Add</button>
             </fieldset>
+            <p id="label-dialog-status" role="status"></p>
         </form>
-    </dialog>
+    </div>
     <script>
         const formTabs = [...document.querySelectorAll('.form-tabs [role="tab"]')];
 
@@ -1211,6 +1279,8 @@
         const labelsStatus = document.getElementById('labels-status');
         const labelDialog = document.getElementById('label-dialog');
         let labelField = 'subject';
+        let labelOpener = null;
+        let labelEditorRevision = 0;
         for (const prefix of ['event', 'task']) {
             for (const field of Object.keys(labelSuggestions)) {
                 const heading = document.getElementById(`${prefix}-${field}-heading`);
@@ -1219,15 +1289,26 @@
                 add.className = 'label-add';
                 add.textContent = '+';
                 add.setAttribute('aria-label', `Add ${field === 'subject' ? 'subject' : 'type'}`);
+                add.setAttribute('aria-controls', 'label-dialog');
+                add.setAttribute('aria-expanded', 'false');
+                add.setAttribute('aria-haspopup', 'dialog');
                 add.title = add.getAttribute('aria-label');
                 add.addEventListener('click', () => {
-                    if (busy || !labelsReady || storageError) return;
+                    closeLabelEditor(false);
+                    labelOpener = add;
                     labelField = field;
                     document.getElementById('label-dialog-heading').textContent = `Add ${field === 'subject' ? 'subject' : 'type'}`;
                     document.getElementById('label-name').value = '';
-                    document.getElementById('label-dialog-status').textContent = '';
-                    labelDialog.showModal();
-                    document.getElementById('label-name').focus();
+                    document.getElementById('label-dialog-status').textContent =
+                        labelsStatus.textContent || (busy || !labelsReady ? 'Loading labels...' : storageError ? 'Browser storage unavailable.' : '');
+                    labelDialog.hidden = false;
+                    add.setAttribute('aria-expanded', 'true');
+                    const rect = add.getBoundingClientRect();
+                    labelDialog.style.left = `${Math.max(12, Math.min(rect.left, innerWidth - labelDialog.offsetWidth - 12))}px`;
+                    labelDialog.style.top = `${Math.max(12, Math.min(rect.bottom + 6, innerHeight - labelDialog.offsetHeight - 12))}px`;
+                    const input = document.getElementById('label-name');
+                    if (!document.getElementById('label-fields').disabled) input.focus();
+                    else document.getElementById('label-cancel').focus();
                 });
                 heading.append(add);
             }
@@ -1252,14 +1333,36 @@
                 queueMicrotask(updateLabelButtons);
             });
         }
-        document.getElementById('label-cancel').addEventListener('click', () => labelDialog.close());
+        function closeLabelEditor(restoreFocus = true) {
+            labelEditorRevision++;
+            labelDialog.hidden = true;
+            if (labelOpener) {
+                labelOpener.setAttribute('aria-expanded', 'false');
+                if (restoreFocus) labelOpener.focus();
+                labelOpener = null;
+            }
+        }
+
+        document.getElementById('label-cancel').addEventListener('click', () => closeLabelEditor());
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !labelDialog.hidden) {
+                event.preventDefault();
+                closeLabelEditor();
+            }
+        });
+        document.addEventListener('click', event => {
+            if (!labelDialog.hidden && !labelDialog.contains(event.target) && !event.target.closest('.label-add')) {
+                closeLabelEditor(false);
+            }
+        });
         document.getElementById('label-form').addEventListener('submit', async event => {
             event.preventDefault();
             const revision = session;
+            const editorRevision = labelEditorRevision;
             document.getElementById('label-dialog-status').textContent = 'Saving label...';
             const saved = await changeLabel(labelField, document.getElementById('label-name').value.trim(), false);
-            if (session !== revision) return;
-            if (saved) labelDialog.close();
+            if (session !== revision || labelEditorRevision !== editorRevision) return;
+            if (saved) closeLabelEditor();
             else document.getElementById('label-dialog-status').textContent = labelsStatus.textContent;
         });
 
@@ -1323,7 +1426,7 @@
         }
 
         function loadLabelBackup() {
-            labelDialog.close();
+            closeLabelEditor(false);
             labelsReady = false;
             labelChoices = validateLabels(null);
             labelsStatus.textContent = '';
@@ -1437,10 +1540,14 @@
             document.querySelectorAll('.delete-block, .edit-block, .label-options button').forEach(button => {
                 button.disabled = busy || storageError;
             });
-            document.querySelectorAll('.label-add, .label-remove').forEach(button => {
+            document.querySelectorAll('.label-remove').forEach(button => {
                 button.disabled = busy || storageError || !labelsReady;
             });
             document.getElementById('label-fields').disabled = busy || storageError || !labelsReady;
+            if (!labelDialog.hidden) {
+                document.getElementById('label-dialog-status').textContent = labelsStatus.textContent
+                    || (busy || !labelsReady ? 'Loading labels...' : storageError ? 'Browser storage unavailable.' : '');
+            }
             taskOptions.querySelectorAll('button').forEach(button => {
                 button.disabled = busy || storageError;
             });
@@ -2559,7 +2666,7 @@
                     loadGuest('Cloud disabled. Browser only.');
                     return;
                 }
-                const { createCloud } = await import('./cloud.js');
+                const { createCloud } = await import('./cloud.js?v=labels-v1');
                 cloud = createCloud();
                 cloudAvailable = true;
                 await cloud.start(accountChanged, error => {
