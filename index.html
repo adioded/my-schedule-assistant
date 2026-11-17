@@ -333,17 +333,28 @@
             border-right-color: #d5a1b0;
         }
 
-        .schedule-table td.time-slot {
+        .schedule-table td.occupied-slot {
             position: relative;
-            background: #fffcf9;
-            border-left: 4px solid #b85e70;
-            padding: 8px 28px 8px 8px;
-            border-radius: 6px;
-            overflow-wrap: anywhere;
-            transition: all 0.3s ease;
+            padding: 0;
+            background: #fff8f5;
         }
 
-        .schedule-table td.time-slot:hover {
+        .schedule-table td.occupied-slot.current-day {
+            background: #f9e9ee;
+        }
+
+        .schedule-table .time-slot {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background: #fffcf9;
+            border-left: 4px solid #b85e70;
+            border-radius: 6px;
+            overflow-wrap: anywhere;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        .schedule-table .time-slot:hover {
             background: #fceef0;
             border-left-color: #95475d;
         }
@@ -373,7 +384,9 @@
         .edit-block {
             display: block;
             width: 100%;
-            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            padding: 0 26px 0 6px;
             background: transparent;
             color: inherit;
             text-align: left;
@@ -384,6 +397,10 @@
         .edit-block:hover {
             transform: none;
             box-shadow: none;
+        }
+
+        .edit-block .slot-time {
+            padding-top: 4px;
         }
 
         @media (hover: none) {
@@ -417,17 +434,17 @@
             gap: 8px;
         }
 
-        .schedule-table td.time-slot.event {
+        .schedule-table .time-slot.event {
             border-left-color: #b85e70;
             background: #f7e2e8;
         }
 
-        .schedule-table td.time-slot.task {
+        .schedule-table .time-slot.task {
             border-left-color: #cb7059;
             background: #fce5dc;
         }
 
-        .schedule-table td.time-slot.empty {
+        .schedule-table .time-slot.empty {
             border-left-color: #dfc5cc;
             background: #fff8f5;
         }
@@ -1151,6 +1168,21 @@
             currentTimeLine.setAttribute('aria-label', `Current time: ${formatTime(minutes)}`);
         }
 
+        function positionScheduleBlocks() {
+            const rows = [...scheduleBody.rows].map(row => row.getBoundingClientRect());
+            scheduleBody.querySelectorAll('.time-slot').forEach(block => {
+                const start = Number(block.dataset.start);
+                const end = Number(block.dataset.end);
+                const first = rows[Math.floor(start / 30)];
+                const last = rows[Math.ceil(end / 30) - 1];
+                const top = first.top + first.height * (start % 30) / 30;
+                const bottom = last.top + last.height * ((end - 1) % 30 + 1) / 30;
+                const cell = block.parentElement;
+                block.style.top = `${top - cell.getBoundingClientRect().top - cell.clientTop}px`;
+                block.style.height = `${bottom - top}px`;
+            });
+        }
+
         function renderSchedule() {
             const scheduledItems = [];
             for (let day = 0; day < 7; day++) {
@@ -1183,7 +1215,12 @@
                     cell.dataset.day = day;
                     if (item) {
                         cell.rowSpan = Math.ceil(toMinutes(item.end) / 30) - Math.floor(toMinutes(item.start) / 30);
-                        cell.classList.add('time-slot', item.type);
+                        cell.classList.add('occupied-slot');
+                        const block = document.createElement('div');
+                        block.classList.add('time-slot', item.type);
+                        block.dataset.start = toMinutes(item.start);
+                        block.dataset.end = toMinutes(item.end);
+                        block.title = `${item.title}: ${item.start} - ${item.end}${item.description ? ` (${item.description})` : ''}`;
                         const time = document.createElement('span');
                         time.className = 'slot-time';
                         time.textContent = `${item.start} – ${item.end}`;
@@ -1208,19 +1245,24 @@
                         edit.setAttribute('aria-label', `Edit ${item.title}, ${item.occurrenceDate}, ${item.start} - ${item.end}`);
                         edit.append(time, title, description);
                         edit.addEventListener('click', () => editBlock(item.id, item.occurrenceDate));
-                        cell.addEventListener('click', event => {
+                        block.addEventListener('click', event => {
                             if (!event.target.closest('button')) editBlock(item.id, item.occurrenceDate);
                         });
-                        cell.append(edit, remove);
+                        block.append(edit, remove);
+                        cell.append(block);
                     }
                     row.append(cell);
                 }
                 scheduleBody.append(row);
             }
+            positionScheduleBlocks();
             updateCurrentTime();
         }
         renderSchedule();
-        new ResizeObserver(updateCurrentTime).observe(document.querySelector('.schedule-table'));
+        new ResizeObserver(() => {
+            positionScheduleBlocks();
+            updateCurrentTime();
+        }).observe(document.querySelector('.schedule-table'));
         setInterval(updateCurrentTime, 30000);
         window.addEventListener('focus', updateCurrentTime);
         document.addEventListener('visibilitychange', () => {
