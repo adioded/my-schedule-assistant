@@ -955,20 +955,22 @@
                 <h1>📅 My Schedule Assistant</h1>
             </header>
             <section class="account-panel" aria-label="Account and saving">
-                <p id="account-status" class="schedule-note">Checking sign-in...</p>
+                <p id="account-status" class="schedule-note">Connecting...</p>
                 <div class="account-actions">
-                    <button id="sign-in" type="button" disabled>Sign in with Google</button>
+                    <button id="sign-in" type="button" aria-label="Sign in with Google" title="Sign in with Google" disabled>Sign in</button>
                     <button id="sign-out" class="icon-button" type="button" aria-label="Sign out" title="Sign out" hidden>
                         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 21H4V3h5M14 8l5 4-5 4M9 12h10"/></svg>
                     </button>
                     <button id="retry-sync" class="icon-button" type="button" aria-label="Refresh / Retry sync" title="Refresh / Retry sync" hidden>
                         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/></svg>
                     </button>
-                    <button id="discard-pending" type="button" hidden>Discard unsynced additions</button>
+                    <button id="discard-pending" class="icon-button" type="button" aria-label="Discard unsynced additions" title="Discard unsynced additions" hidden>
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>
+                    </button>
                 </div>
                 <p id="auth-status" class="schedule-note" role="status"></p>
                 <div id="pending-panel" class="schedule-note" hidden>
-                    <p>These additions are backed up on this device, but are not yet saved to the cloud or shown in the calendar:</p>
+                    <p>Unsynced additions:</p>
                     <ul id="pending-events"></ul>
                 </div>
             </section>
@@ -978,15 +980,15 @@
             <!-- Main Schedule Section -->
             <div class="schedule-section">
                 <div class="week-header">
-                    <h2>Current Week Schedule</h2>
+                    <h2>This week</h2>
                     <div class="nav-buttons">
-                        <button>← Previous</button>
+                        <button aria-label="Previous week" title="Previous week">&#8592;</button>
                         <button>Today</button>
-                        <button>Next →</button>
+                        <button aria-label="Next week" title="Next week">&#8594;</button>
                     </div>
                 </div>
 
-                <p id="save-status" class="save-status" role="status" data-state="pending">Connecting to sign-in service...</p>
+                <p id="save-status" class="save-status" role="status" data-state="pending">Connecting...</p>
                 <div class="schedule-scroll" role="region" aria-label="Weekly schedule" tabindex="0">
                 <div class="schedule-grid">
                 <table class="schedule-table" aria-label="Sunday to Saturday schedule in half-hour slots">
@@ -1013,15 +1015,15 @@
             <div class="sidebar">
                 <div class="sidebar-panel">
                     <div class="form-tabs" role="tablist" aria-label="Add to schedule">
-                        <button type="button" id="event-tab" role="tab" aria-selected="true" aria-controls="event-panel">Add Event</button>
-                        <button type="button" id="task-tab" role="tab" aria-selected="false" aria-controls="task-panel" tabindex="-1">Add Task</button>
+                        <button type="button" id="event-tab" role="tab" aria-selected="true" aria-controls="event-panel">Event</button>
+                        <button type="button" id="task-tab" role="tab" aria-selected="false" aria-controls="task-panel" tabindex="-1">Task</button>
                     </div>
-                    <button id="cancel-edit" type="button" hidden>Cancel editing</button>
+                    <button id="cancel-edit" type="button" title="Cancel editing" hidden>Cancel</button>
                     <p id="labels-status" class="schedule-note" role="status"></p>
                 <!-- Add Event Panel -->
                 <form id="event-panel" role="tabpanel" aria-labelledby="event-tab">
                     <div class="form-group">
-                        <label for="event-title">Event Title</label>
+                        <label for="event-title">Title</label>
                         <input type="text" id="event-title" placeholder="Subject - Type" maxlength="203" required>
                     </div>
                     <div class="form-row">
@@ -1042,17 +1044,17 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="event-time">Start Time</label>
+                            <label for="event-time">Start</label>
                             <input type="time" id="event-time" required>
                         </div>
                         <div class="form-group">
-                            <label for="event-end">End Time</label>
+                            <label for="event-end">End</label>
                             <input type="time" id="event-end" required>
                         </div>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="event-repeat">
-                        <label for="event-repeat" style="margin: 0;">Repeat Weekly</label>
+                        <label for="event-repeat" style="margin: 0;">Weekly</label>
                     </div>
                     <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Add Event</button>
                     <p id="event-status" class="schedule-note" role="status" style="margin-top: 12px;"></p>
@@ -1061,7 +1063,7 @@
                 <!-- Add Task Panel -->
                 <form id="task-panel" role="tabpanel" aria-labelledby="task-tab" hidden>
                     <div class="form-group">
-                        <label for="task-title">Task Title</label>
+                        <label for="task-title">Title</label>
                         <input type="text" id="task-title" placeholder="Subject - Type" maxlength="203" required>
                     </div>
                     <div class="form-row">
@@ -1078,7 +1080,7 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="task-duration">Duration (hours)</label>
+                            <label for="task-duration">Hours</label>
                             <input type="number" id="task-duration" min="0.5" step="0.5" placeholder="2" required>
                         </div>
                         <div class="form-group">
@@ -1110,7 +1112,7 @@
                         </div>
                     </fieldset>
                     <button type="submit" style="width: 100%; margin-top: 10px;" disabled>Suggest times</button>
-                    <p class="schedule-note" style="margin-top: 8px;">Available hours: 08:00-22:00. Choose an option to save.</p>
+                    <p class="schedule-note" style="margin-top: 8px;" title="Scheduling hours. Select a suggested time to save."><span aria-hidden="true">&#9719;</span> 08:00-22:00</p>
                     <p id="task-status" class="schedule-note" role="status" style="margin-top: 12px;"></p>
                     <ol id="task-options" class="schedule-note" aria-label="Suggested task schedules"></ol>
                 </form>
@@ -1121,7 +1123,7 @@
 
     </div>
     <dialog id="delete-dialog" class="delete-dialog" aria-labelledby="delete-heading" aria-describedby="delete-description">
-        <h2 id="delete-heading">Delete repeating event?</h2>
+        <h2 id="delete-heading">Delete event?</h2>
         <p id="delete-description"></p>
         <form method="dialog">
             <button value="occurrence">This occurrence</button>
@@ -1130,11 +1132,10 @@
         </form>
     </dialog>
     <dialog id="edit-dialog" class="delete-dialog" aria-labelledby="edit-heading">
-        <h2 id="edit-heading">What would you like to edit?</h2>
-        <p>Change only this block or occurrence, or all blocks in the task / occurrences in the series?</p>
+        <h2 id="edit-heading">Edit one or all?</h2>
         <form method="dialog">
-            <button value="one">Only this one</button>
-            <button value="all">All of them</button>
+            <button value="one">This block</button>
+            <button value="all">All</button>
             <button value="cancel" autofocus>Cancel</button>
         </form>
     </dialog>
@@ -1235,6 +1236,12 @@
                 if (event.target.id === `${prefix}-subject` || event.target.id === `${prefix}-type-label`) {
                     const labels = readLabels(prefix);
                     document.getElementById(`${prefix}-title`).value = [labels.subject, labels.typeLabel].filter(Boolean).join(' - ');
+                } else if (event.target.id === `${prefix}-title`) {
+                    const title = event.target.value;
+                    const subject = document.getElementById(`${prefix}-subject`);
+                    const type = document.getElementById(`${prefix}-type-label`);
+                    if (subject.value && title.trim() !== subject.value && !title.trimStart().startsWith(`${subject.value} - `)) subject.value = '';
+                    if (type.value && title.trim() !== type.value && !title.trimEnd().endsWith(` - ${type.value}`)) type.value = '';
                 }
                 updateLabelButtons();
             });
@@ -1326,7 +1333,7 @@
                 labelsReady = !currentUser;
             } catch (error) {
                 console.error('Unable to load label choices:', error);
-                labelsStatus.textContent = 'Could not load saved labels. Label changes are disabled; check browser storage and reload.';
+                labelsStatus.textContent = 'Labels unavailable. Check browser storage; reload to edit.';
             }
             updateLabelButtons();
         }
@@ -1342,13 +1349,13 @@
                     localStorage.setItem(`${labelsKey}:${uid}`, JSON.stringify(choices));
                 } catch (error) {
                     console.error('Unable to back up labels:', error);
-                    labelsStatus.textContent = 'Labels loaded from cloud, but their browser backup could not be updated.';
+                    labelsStatus.textContent = 'Labels synced; browser backup failed.';
                 }
             } catch (error) {
                 console.error('Unable to load cloud labels:', error);
                 if (session !== revision) return;
                 labelsReady = false;
-                labelsStatus.textContent = `Label choices could not be refreshed. ${cloudError(error)} Use Refresh / Retry sync before changing labels.`;
+                labelsStatus.textContent = `Labels unavailable. ${cloudError(error)} Refresh to edit.`;
             }
             updateLabelButtons();
         }
@@ -1356,7 +1363,7 @@
         async function changeLabel(field, label, remove) {
             if (busy || storageError || !labelsReady) return;
             if (!label || label.length > 100) {
-                labelsStatus.textContent = 'Enter a label between 1 and 100 characters.';
+                labelsStatus.textContent = 'Use 1-100 characters.';
                 return;
             }
             const revision = session;
@@ -1367,16 +1374,16 @@
                 if (remove) choices[field] = choices[field].filter(value => value !== match);
                 else {
                     if (match) throw new Error('That label already exists.');
-                    if (choices[field].length >= 100) throw new Error('You can save up to 100 labels in each group.');
+                    if (choices[field].length >= 100) throw new Error('100-label limit per group.');
                     choices[field].push(label);
                 }
                 return choices;
             };
             busy = true;
             updateControls();
-            labelsStatus.textContent = uid ? 'Saving labels to cloud...' : 'Saving labels...';
+            labelsStatus.textContent = 'Saving labels...';
             try {
-                if (uid && !navigator.onLine) throw new Error('You are offline. Reconnect and try again.');
+                if (uid && !navigator.onLine) throw new Error('Offline. Reconnect and retry.');
                 const choices = uid ? await cloud.saveLabels(uid, merge) : merge(labelChoices);
                 if (session !== revision) return;
                 if (!uid) localStorage.setItem(labelsKey, JSON.stringify(choices));
@@ -1390,19 +1397,19 @@
                         }
                     }
                 }
-                labelsStatus.textContent = uid ? 'Labels saved to your account.' : 'Labels saved in this browser. Sign in for account-synced labels.';
+                labelsStatus.textContent = uid ? 'Labels synced.' : 'Labels saved locally.';
                 if (uid) {
                     try {
                         localStorage.setItem(`${labelsKey}:${uid}`, JSON.stringify(choices));
                     } catch (error) {
                         console.error('Unable to back up labels:', error);
-                        labelsStatus.textContent = 'Labels saved to cloud, but their browser backup could not be updated.';
+                        labelsStatus.textContent = 'Labels synced; browser backup failed.';
                     }
                 }
                 return true;
             } catch (error) {
                 console.error('Label change failed:', error);
-                if (session === revision) labelsStatus.textContent = `Label change was not confirmed saved. ${cloudError(error)} Refresh to check the latest choices before retrying.`;
+                if (session === revision) labelsStatus.textContent = `Label save unconfirmed. ${cloudError(error)} Refresh before retrying.`;
             } finally {
                 if (session === revision) {
                     busy = false;
@@ -1536,13 +1543,13 @@
             cloudLoaded = false;
             try {
                 savedEvents = guestEvents();
-                setSaveStatus('local', message || 'Browser only - not synced. Sign in to save to the cloud.');
+                setSaveStatus('local', message || 'Browser only. Sign in to sync.');
             } catch (error) {
                 console.error('Unable to load browser events:', error);
                 storageError = true;
-                setSaveStatus('error', 'Could not load browser events. Adding is disabled to protect your data. Check browser storage permissions and reload.');
+                setSaveStatus('error', 'Browser data unavailable. Editing disabled. Check storage permissions; reload.');
             }
-            document.getElementById('account-status').textContent = 'Not signed in.';
+            document.getElementById('account-status').textContent = 'Guest';
             busy = false;
             updateControls();
             renderSchedule();
@@ -1814,7 +1821,7 @@
                 }
                 updateTaskSplit();
                 submitTask.textContent = 'Update task';
-                taskStatus.textContent = 'Edit the fields, then press Update task to choose new times. Existing blocks stay until you select an option.';
+                taskStatus.textContent = 'Choose new times to update.';
                 document.getElementById('task-title').focus();
             } else {
                 activateTab(document.getElementById('event-tab'));
@@ -1824,7 +1831,7 @@
                 document.getElementById('event-end').value = original.end;
                 document.getElementById('event-repeat').checked = original.repeat && !editing.occurrenceOnly;
                 submitEvent.textContent = 'Update event';
-                eventStatus.textContent = 'Edit the fields and press Update event. The original stays until the update is saved.';
+                eventStatus.textContent = '';
                 document.getElementById('event-title').focus();
             }
         }
@@ -1862,10 +1869,10 @@
             };
             busy = true;
             updateControls();
-            status.textContent = 'Updating... The original remains until saving is confirmed.';
-            setSaveStatus('pending', signedIn ? 'Updating in cloud... Waiting for confirmation.' : 'Updating in this browser...');
+            status.textContent = 'Updating...';
+            setSaveStatus('pending', signedIn ? 'Updating cloud...' : 'Updating locally...');
             const waiting = setTimeout(() => {
-                if (session === revision) setSaveStatus('pending', 'Still waiting for update confirmation. Keep this page open; the original is still displayed.');
+                if (session === revision) setSaveStatus('pending', 'Update unconfirmed. Keep this page open.');
             }, 15000);
             try {
                 validateEvents(entries, true);
@@ -1883,14 +1890,14 @@
                 if (signedIn) cloudLoaded = true;
                 renderSchedule();
                 setSaveStatus(signedIn && !pending.length ? 'saved' : 'local', signedIn
-                    ? `Update saved to cloud.${pending.length ? ' Other additions are not synced. Use Retry sync.' : ''}`
-                    : 'Updated on this device only - not synced.');
+                    ? `Updated in cloud.${pending.length ? ' Unsynced additions remain; retry sync.' : ''}`
+                    : 'Updated locally. Not synced.');
                 if (signedIn) {
                     try {
                         backupEvents();
                     } catch (error) {
                         console.error('Unable to back up update:', error);
-                        setSaveStatus('local', 'Update saved to cloud, but the browser backup could not be updated. Check browser storage.');
+                        setSaveStatus('local', 'Updated in cloud; browser backup failed.');
                     }
                 }
                 cancelEditing();
@@ -1899,8 +1906,8 @@
             } catch (error) {
                 console.error('Schedule update failed:', error);
                 if (session === revision) {
-                    status.textContent = `Update not confirmed. Your edits have been kept. ${cloudError(error)}`;
-                    setSaveStatus('error', 'Update not confirmed. The original is still displayed. Check the form error; refresh before retrying if cloud confirmation was lost.');
+                    status.textContent = `Update unconfirmed. Edits kept. ${cloudError(error)}`;
+                    setSaveStatus('error', 'Update unconfirmed. Original kept. Refresh before retrying.');
                 }
                 return false;
             } finally {
@@ -1921,7 +1928,7 @@
             if (original.repeat) {
                 const dialog = document.getElementById('delete-dialog');
                 document.getElementById('delete-description').textContent =
-                    `"${original.title}" on ${dateFormatter.format(new Date(`${occurrenceDate}T00:00:00`))}. Delete just this occurrence or every week in this series?`;
+                    `${original.title} · ${dateFormatter.format(new Date(`${occurrenceDate}T00:00:00`))}`;
                 dialog.returnValue = 'cancel';
                 scope = await new Promise(resolve => {
                     dialog.addEventListener('close', () => resolve(dialog.returnValue), { once: true });
@@ -1947,9 +1954,9 @@
             const uid = currentUser?.uid;
             busy = true;
             updateControls();
-            setSaveStatus('pending', signedIn ? 'Deleting from cloud... Waiting for confirmation.' : 'Deleting in this browser...');
+            setSaveStatus('pending', signedIn ? 'Deleting from cloud...' : 'Deleting locally...');
             const waiting = signedIn ? setTimeout(() => {
-                if (session === revision) setSaveStatus('pending', 'Still waiting for cloud confirmation. The block has not been removed from this calendar yet. Keep this page open.');
+                if (session === revision) setSaveStatus('pending', 'Deletion unconfirmed. Keep this page open.');
             }, 15000) : null;
             try {
                 let confirmed;
@@ -1969,20 +1976,20 @@
                 if (signedIn) cloudLoaded = true;
                 renderSchedule();
                 const message = signedIn
-                    ? `Deleted from cloud.${pendingEvents.length ? ' Other additions are still not synced. Use Retry sync.' : ''}`
-                    : 'Deleted on this device only - not synced.';
+                    ? `Deleted from cloud.${pendingEvents.length ? ' Unsynced additions remain; retry sync.' : ''}`
+                    : 'Deleted locally. Not synced.';
                 setSaveStatus(signedIn && !pendingEvents.length ? 'saved' : 'local', message);
                 if (signedIn) {
                     try {
                         backupEvents();
                     } catch (error) {
                         console.error('Unable to back up deletion:', error);
-                        setSaveStatus('local', `${message} The browser backup could not be updated. Check browser storage.`);
+                        setSaveStatus('local', `${message} Browser backup failed.`);
                     }
                 }
             } catch (error) {
                 console.error('Block deletion failed:', error);
-                if (session === revision) setSaveStatus('error', `Deletion not confirmed. The block has been kept in this calendar. ${signedIn ? cloudError(error) : 'Browser storage could not be updated.'} Refresh and try deleting again.`);
+                if (session === revision) setSaveStatus('error', `Deletion unconfirmed. Block kept. ${signedIn ? cloudError(error) : 'Browser storage failed.'} Refresh before retrying.`);
             } finally {
                 clearTimeout(waiting);
                 if (session === revision) {
@@ -2005,7 +2012,7 @@
                 repeat: document.getElementById('event-repeat').checked
             };
             if (!validEvent(entry)) {
-                eventStatus.textContent = 'Enter a title, a valid date, and an end time later than the start time on the same day.';
+                eventStatus.textContent = 'Enter a title, date, and times (end after start).';
                 return;
             }
             if (editing && editing.originals[0].type !== 'task') {
@@ -2030,13 +2037,13 @@
             for (const entry of entries) {
                 const conflict = combined.find(existing => eventsConflict(existing, entry));
                 if (conflict) {
-                    status.textContent = `This block shares a half-hour slot with "${conflict.title}". Choose another time.`;
+                    status.textContent = `Slot overlaps "${conflict.title}". Choose another time.`;
                     return false;
                 }
                 combined.push(entry);
             }
             if (combined.length > 1000) {
-                status.textContent = 'The schedule is limited to 1,000 scheduled blocks. Nothing was added.';
+                status.textContent = '1,000-block limit. Nothing added.';
                 return false;
             }
             status.textContent = '';
@@ -2047,7 +2054,7 @@
                     backupEvents(savedEvents, nextPending);
                 } catch (error) {
                     console.error('Unable to back up schedule additions:', error);
-                    setSaveStatus('error', 'Not saved. Browser backup failed; nothing was uploaded. Keep this form open and check browser storage.');
+                    setSaveStatus('error', 'Not saved or uploaded. Browser backup failed. Keep this form open.');
                     return false;
                 }
                 pendingEvents = nextPending;
@@ -2056,17 +2063,17 @@
                 return session === revision && entries.every(entry => savedEvents.some(item => item.id === entry.id));
             }
             const nextEvents = [...savedEvents, ...entries];
-            setSaveStatus('pending', 'Saving in this browser...');
+            setSaveStatus('pending', 'Saving locally...');
             try {
                 backupEvents(nextEvents);
             } catch (error) {
                 console.error('Unable to save schedule additions:', error);
-                setSaveStatus('error', 'Not saved. Check browser storage permissions or available space and try again. Your form has been kept.');
+                setSaveStatus('error', 'Not saved. Form kept. Check browser storage; retry.');
                 return false;
             }
             savedEvents = nextEvents;
             renderSchedule();
-            setSaveStatus('local', 'Saved on this device only - not synced.');
+            setSaveStatus('local', 'Saved locally. Not synced.');
             return true;
         }
 
@@ -2267,19 +2274,19 @@
             const priority = document.getElementById('task-priority').value;
             if (!title || !validDate(deadline) || deadline < dateKey(now)
                 || !Number.isSafeInteger(totalMinutes) || totalMinutes < 30 || totalMinutes % 30 !== 0) {
-                taskStatus.textContent = 'Enter a title, a deadline today or later, and a duration in half-hour steps.';
+                taskStatus.textContent = 'Enter a title, deadline (today or later), and hours in 0.5 steps.';
                 return;
             }
             if (split && (!Number.isSafeInteger(minimum) || minimum < 30 || minimum % 30 !== 0
                 || !Number.isSafeInteger(maximum) || maximum % 30 !== 0 || maximum < minimum || maximum > totalMinutes)) {
-                taskStatus.textContent = 'Choose minimum and maximum blocks in half-hour steps, with minimum <= maximum <= duration.';
+                taskStatus.textContent = 'Use 0.5-hour steps: minimum <= maximum <= duration.';
                 return;
             }
             const context = editing?.originals[0].type === 'task' ? editing : null;
             const options = suggestTaskSchedules(now, deadline, totalMinutes, minimum, split, maximum);
             taskStatus.textContent = options.length
-                ? `${options.length} ${options.length === 1 ? 'option' : 'options'} found. Choose one to ${context ? 'update' : 'add'} your task.`
-                : 'No available options before the deadline within 08:00-22:00. Extend the deadline, reduce the duration, or adjust the minimum and maximum block lengths.';
+                ? `Choose a time to ${context ? 'update' : 'save'}:`
+                : 'No times available. Adjust deadline, hours, or block range.';
             options.forEach(blocks => {
                 const option = document.createElement('li');
                 const label = block => `${dateFormatter.format(new Date(`${block.date}T00:00:00`))}, ${block.start} - ${block.end}`;
@@ -2291,7 +2298,7 @@
                     if (context && context !== editing) return;
                     if (new Date(`${blocks[0].date}T${blocks[0].start}`) < new Date()) {
                         taskOptions.replaceChildren();
-                        taskStatus.textContent = 'These times have passed. Suggest times again for fresh options.';
+                        taskStatus.textContent = 'Times expired. Suggest again.';
                         return;
                     }
                     const revision = session;
@@ -2306,11 +2313,11 @@
                         taskOptions.replaceChildren();
                         const shown = entries.find(entry => [...document.querySelectorAll('.day-date')].some(label =>
                             occursOn(entry, new Date(`${label.dateTime}T00:00:00`))));
-                        taskStatus.textContent = `Task ${context ? 'updated' : 'added'}${entries.length > 1 ? ` in ${entries.length} blocks` : ''}.${shown ? '' : ' Its dates are outside the displayed week.'}`;
+                        taskStatus.textContent = `Task ${context ? 'updated' : 'added'}${entries.length > 1 ? ` (${entries.length} blocks)` : ''}.${shown ? '' : ' Outside this week.'}`;
                         if (shown) focusTime(toMinutes(shown.start));
                     } else if (pendingEvents.some(entry => entry.taskId === taskId)) {
                         taskOptions.replaceChildren();
-                        taskStatus.textContent = 'Task backed up on this device, but not confirmed saved to cloud. Use Retry sync.';
+                        taskStatus.textContent = 'Task saved locally. Cloud unconfirmed; retry sync.';
                     }
                 });
                 option.append(choose);
@@ -2323,16 +2330,16 @@
                 occursOn(entry, new Date(`${label.dateTime}T00:00:00`)));
             eventStatus.textContent = shown
                 ? 'Event added.'
-                : 'Event saved. Its date is outside the displayed week.';
+                : 'Event saved outside this week.';
             if (shown) focusTime(toMinutes(entry.start));
         }
 
         function cloudError(error) {
             const code = error.code || '';
-            if (code.includes('resource-exhausted')) return 'Cloud usage limit reached. Retry after the quota resets.';
-            if (code.includes('permission-denied')) return 'Cloud access denied. Check sign-in and database permissions.';
-            if (code.includes('unavailable') || !navigator.onLine) return 'Cloud is unreachable. Check your connection and retry.';
-            return error.message || 'An unexpected cloud error occurred. Please retry.';
+            if (code.includes('resource-exhausted')) return 'Cloud quota reached. Retry later.';
+            if (code.includes('permission-denied')) return 'Cloud access denied. Check sign-in and permissions.';
+            if (code.includes('unavailable') || !navigator.onLine) return 'Cloud unreachable. Reconnect and retry.';
+            return error.message || 'Cloud error. Retry.';
         }
 
         async function syncPending() {
@@ -2342,9 +2349,9 @@
             const additions = [...pendingEvents];
             busy = true;
             updateControls();
-            setSaveStatus('pending', 'Saving to cloud... A backup is saved on this device.');
+            setSaveStatus('pending', 'Syncing... Local backup saved.');
             const waiting = setTimeout(() => {
-                if (session === revision) setSaveStatus('pending', 'Still waiting for cloud confirmation. Backed up on this device, but not confirmed saved to cloud. Keep this page open.');
+                if (session === revision) setSaveStatus('pending', 'Cloud unconfirmed. Local backup saved. Keep this page open.');
             }, 15000);
             try {
                 if (!navigator.onLine) throw new Error('You are offline.');
@@ -2356,14 +2363,14 @@
                 renderSchedule();
                 try {
                     backupEvents();
-                    setSaveStatus('saved', 'Saved to cloud. Available when you sign in on another device.');
+                    setSaveStatus('saved', 'Saved to cloud.');
                 } catch (error) {
                     console.error('Unable to update browser backup:', error);
-                    setSaveStatus('local', 'Saved to cloud, but the browser backup could not be updated. Check browser storage.');
+                    setSaveStatus('local', 'Saved to cloud; browser backup failed.');
                 }
             } catch (error) {
                 console.error('Cloud save failed:', error);
-                if (session === revision) setSaveStatus('error', `Saved on this device only - NOT synced. ${cloudError(error)} Use Retry sync, or discard the unsynced additions to edit them.`);
+                if (session === revision) setSaveStatus('error', `Local only. NOT synced. ${cloudError(error)} Retry sync or discard additions.`);
             } finally {
                 clearTimeout(waiting);
                 if (session === revision) {
@@ -2379,7 +2386,7 @@
             const revision = session;
             busy = true;
             updateControls();
-            setSaveStatus('pending', 'Loading the latest cloud schedule...');
+            setSaveStatus('pending', 'Refreshing...');
             try {
                 await loadCloudLabels(uid, revision);
                 if (session !== revision) return;
@@ -2392,15 +2399,15 @@
                 try {
                     backupEvents();
                     setSaveStatus(pendingEvents.length ? 'local' : 'saved', pendingEvents.length
-                        ? 'Cloud schedule loaded. Some additions are saved on this device only - not synced. Use Retry sync.'
-                        : 'Cloud schedule loaded. All displayed items are saved to cloud.');
+                        ? 'Cloud loaded. Unsynced additions remain; retry sync.'
+                        : 'Saved to cloud.');
                 } catch (error) {
                     console.error('Unable to update browser backup:', error);
-                    setSaveStatus('local', 'Cloud schedule loaded, but the browser backup could not be updated.');
+                    setSaveStatus('local', 'Cloud loaded; browser backup failed.');
                 }
             } catch (error) {
                 console.error('Cloud load failed:', error);
-                if (session === revision) setSaveStatus('error', `${cloudError(error)} Showing this account's browser backup only; it may be out of date. Use Refresh / Retry sync.`);
+                if (session === revision) setSaveStatus('error', `${cloudError(error)} Showing cached data; may be outdated. Retry refresh.`);
             } finally {
                 if (session === revision) {
                     busy = false;
@@ -2429,7 +2436,8 @@
             pendingEvents = [];
             storageError = false;
             cloudLoaded = false;
-            document.getElementById('account-status').textContent = `Signed in as ${user.email || user.displayName || 'Google user'}.`;
+            const name = user.displayName?.trim();
+            document.getElementById('account-status').textContent = name ? `Hello, ${name}` : 'Hello';
             try {
                 const stored = localStorage.getItem(`${eventsKey}:${user.uid}`);
                 if (stored !== null) {
@@ -2440,7 +2448,7 @@
             } catch (error) {
                 console.error('Unable to load account backup:', error);
                 storageError = true;
-                setSaveStatus('error', 'Could not load this account\'s browser backup. Adding and syncing are disabled to protect unsynced data. Check browser storage and reload.');
+                setSaveStatus('error', 'Account backup unavailable. Editing and sync disabled. Check browser storage; reload.');
             }
             busy = false;
             renderSchedule();
@@ -2450,15 +2458,15 @@
         }
 
         document.getElementById('sign-in').addEventListener('click', async () => {
-            authStatus.textContent = 'Complete sign-in in the Google window.';
+            authStatus.textContent = 'Continue in Google...';
             try {
                 await cloud.signIn();
-                authStatus.textContent = 'Signed in with Google.';
+                authStatus.textContent = '';
             } catch (error) {
                 console.error('Google sign-in failed:', error);
-                authStatus.textContent = `Sign-in did not complete. ${error.code === 'auth/popup-blocked'
-                    ? 'Allow pop-ups for this site and try again.'
-                    : error.code === 'auth/popup-closed-by-user' ? 'The Google window was closed. You can try again.' : cloudError(error)}`;
+                authStatus.textContent = `Sign-in failed. ${error.code === 'auth/popup-blocked'
+                    ? 'Allow pop-ups; retry.'
+                    : error.code === 'auth/popup-closed-by-user' ? 'Window closed. Retry.' : cloudError(error)}`;
             }
         });
 
@@ -2477,17 +2485,17 @@
             pendingEvents.length ? syncPending() : refreshCloud());
 
         document.getElementById('discard-pending').addEventListener('click', () => {
-            if (busy || !confirm('Discard additions that have not been confirmed saved to cloud? Browser-only items and confirmed cloud items will not be deleted.')) return;
+            if (busy || !confirm('Discard unsynced additions? Saved calendar items stay.')) return;
             try {
                 backupEvents(savedEvents, []);
                 pendingEvents = [];
                 updateControls();
                 setSaveStatus(cloudLoaded ? 'saved' : 'local', cloudLoaded
-                    ? 'Unsynced additions discarded. Displayed events are saved to cloud.'
-                    : 'Unsynced additions discarded. Showing a browser backup; refresh to confirm the cloud schedule.');
+                    ? 'Unsynced additions discarded. Cloud saved.'
+                    : 'Unsynced additions discarded. Cached data; refresh to confirm.');
             } catch (error) {
                 console.error('Unable to discard unsynced additions:', error);
-                setSaveStatus('error', 'Could not update browser storage. Unsynced additions have been kept.');
+                setSaveStatus('error', 'Browser storage failed. Unsynced additions kept.');
             }
         });
 
@@ -2548,7 +2556,7 @@
             try {
                 const config = await import('./cloud-config.js');
                 if (!config.cloudEnabled) {
-                    loadGuest('Cloud features are disabled. Browser only - not synced.');
+                    loadGuest('Cloud disabled. Browser only.');
                     return;
                 }
                 const { createCloud } = await import('./cloud.js');
@@ -2558,14 +2566,14 @@
                     console.error('Authentication state failed:', error);
                     session++;
                     cloudAvailable = false;
-                    loadGuest('Sign-in service failed. Browser only - not synced.');
+                    loadGuest('Sign-in failed. Browser only.');
                     authStatus.textContent = cloudError(error);
                 });
             } catch (error) {
                 console.error('Cloud initialization failed:', error);
                 cloudAvailable = false;
-                loadGuest('Sign-in service unavailable. Browser only - not synced.');
-                authStatus.textContent = 'Could not connect to Google sign-in. Check your connection and reload. Local events are still available.';
+                loadGuest('Sign-in unavailable. Browser only.');
+                authStatus.textContent = 'Google unavailable. Check connection; reload.';
             }
         }
         initializeCloud();
