@@ -351,6 +351,8 @@
             border-left: 4px solid #b85e70;
             border-radius: 6px;
             overflow-wrap: anywhere;
+            font-size: 0.8rem;
+            line-height: 1.25;
             transition: background 0.3s ease, border-color 0.3s ease;
         }
 
@@ -463,7 +465,7 @@
         }
 
         .slot-description {
-            font-size: 0.85em;
+            font-size: 0.7rem;
             color: #735e67;
         }
 
@@ -472,7 +474,7 @@
             flex-wrap: wrap;
             gap: 3px;
             margin-bottom: 3px;
-            font-size: 0.75em;
+            font-size: 0.7rem;
         }
 
         .slot-label {
@@ -511,7 +513,7 @@
 
         .slot-time {
             display: block;
-            font-size: 0.8em;
+            font-size: 0.7rem;
             color: #783e53;
             margin-bottom: 6px;
         }
@@ -1244,11 +1246,11 @@
             <!-- Main Schedule Section -->
             <div class="schedule-section">
                 <div class="week-header">
-                    <h2>This week</h2>
+                    <h2 id="week-title" aria-live="polite" aria-atomic="true">This week</h2>
                     <div class="nav-buttons">
-                        <button aria-label="Previous week" title="Previous week">&#8592;</button>
-                        <button>Today</button>
-                        <button aria-label="Next week" title="Next week">&#8594;</button>
+                        <button type="button" id="previous-week" aria-label="Previous week" title="Previous week">&#8592;</button>
+                        <button type="button" id="today-week">Today</button>
+                        <button type="button" id="next-week" aria-label="Next week" title="Next week">&#8594;</button>
                     </div>
                 </div>
 
@@ -1900,14 +1902,29 @@
         const dateFormatter = new Intl.DateTimeFormat('en-GB', {
             day: 'numeric', month: 'short', year: 'numeric'
         });
-        document.querySelectorAll('.schedule-table thead th:not(.time-column)').forEach((header, day) => {
-            const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
-            const dateLabel = document.createElement('time');
-            dateLabel.className = 'day-date';
-            dateLabel.dateTime = dateKey(date);
-            dateLabel.textContent = dateFormatter.format(date);
-            header.append(dateLabel);
-        });
+
+        function navigateWeek(offset) {
+            initialTimeFocusPending = false;
+            scrollController?.abort();
+            const scroll = document.querySelector('.schedule-scroll');
+            const scrollTop = scroll.scrollTop;
+            const now = new Date();
+            if (offset === 0) {
+                weekStart.setFullYear(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+            } else {
+                weekStart.setDate(weekStart.getDate() + offset * 7);
+            }
+            renderSchedule();
+            if (offset === 0) {
+                focusTime(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
+            } else {
+                scroll.scrollTop = scrollTop;
+            }
+        }
+
+        document.getElementById('previous-week').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('today-week').addEventListener('click', () => navigateWeek(0));
+        document.getElementById('next-week').addEventListener('click', () => navigateWeek(1));
 
         function occursOn(event, date) {
             const key = dateKey(date);
@@ -2003,6 +2020,19 @@
         }
 
         function renderSchedule() {
+            const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
+            const currentDate = dateKey(new Date());
+            document.getElementById('week-title').textContent =
+                currentDate >= dateKey(weekStart) && currentDate <= dateKey(weekEnd)
+                    ? 'This week' : dateFormatter.formatRange(weekStart, weekEnd);
+            document.querySelectorAll('.schedule-table thead th:not(.time-column)').forEach((header, day) => {
+                const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
+                const dateLabel = header.querySelector('time') || document.createElement('time');
+                dateLabel.className = 'day-date';
+                dateLabel.dateTime = dateKey(date);
+                dateLabel.textContent = dateFormatter.format(date);
+                header.append(dateLabel);
+            });
             const scheduledItems = [];
             for (let day = 0; day < 7; day++) {
                 const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + day);
