@@ -467,6 +467,21 @@
             color: #735e67;
         }
 
+        .slot-labels {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-bottom: 3px;
+            font-size: 0.75em;
+        }
+
+        .slot-label {
+            padding: 1px 5px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.6);
+            color: #783e53;
+        }
+
         .slot-time {
             display: block;
             font-size: 0.8em;
@@ -525,6 +540,36 @@
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
+        }
+
+        .label-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 5px;
+        }
+
+        .label-options button {
+            padding: 3px 6px;
+            border: 1px solid #dfc5cc;
+            border-radius: 6px;
+            background: #f9e9ee;
+            color: #783e53;
+            box-shadow: none;
+            font-size: 0.7rem;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+        }
+
+        .label-options button:hover {
+            transform: none;
+            box-shadow: none;
+            background: #efd8de;
+        }
+
+        .label-options button[aria-pressed="true"] {
+            background: #95475d;
+            color: white;
         }
 
         #event-status:empty {
@@ -817,6 +862,18 @@
                         <label for="event-title">Event Title</label>
                         <input type="text" id="event-title" placeholder="e.g., Lecture" maxlength="200" required>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="event-subject">Subject</label>
+                            <input type="text" id="event-subject" placeholder="Choose or type a label" maxlength="100">
+                            <div id="event-subject-options" class="label-options" role="group" aria-label="Suggested event subjects"></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="event-type-label">Type</label>
+                            <input type="text" id="event-type-label" placeholder="Choose or type a label" maxlength="100">
+                            <div id="event-type-label-options" class="label-options" role="group" aria-label="Suggested event types"></div>
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label for="event-date">Date</label>
                         <input type="date" id="event-date" required>
@@ -844,6 +901,18 @@
                     <div class="form-group">
                         <label for="task-title">Task Title</label>
                         <input type="text" id="task-title" placeholder="e.g., Complete report" maxlength="200" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task-subject">Subject</label>
+                            <input type="text" id="task-subject" placeholder="Choose or type a label" maxlength="100">
+                            <div id="task-subject-options" class="label-options" role="group" aria-label="Suggested task subjects"></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-type-label">Type</label>
+                            <input type="text" id="task-type-label" placeholder="Choose or type a label" maxlength="100">
+                            <div id="task-type-label-options" class="label-options" role="group" aria-label="Suggested task types"></div>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -958,6 +1027,48 @@
         const submitEvent = eventForm.querySelector('button[type="submit"]');
         const submitTask = taskForm.querySelector('button[type="submit"]');
 
+        const labelSuggestions = {
+            subject: ['Generative AI', 'Quantum Physics', 'Electrical Circuits', 'Electrical Lab 1b', 'Random Signals', 'Soccer'],
+            'type-label': ['Lecture', 'Practice', 'Workshop', 'Assignment', 'Preparation']
+        };
+        for (const prefix of ['event', 'task']) {
+            for (const [field, suggestions] of Object.entries(labelSuggestions)) {
+                const input = document.getElementById(`${prefix}-${field}`);
+                const options = document.getElementById(`${prefix}-${field}-options`);
+                suggestions.forEach(label => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = label;
+                    button.setAttribute('aria-pressed', 'false');
+                    button.addEventListener('click', () => {
+                        input.value = input.value === label ? '' : label;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+                    options.append(button);
+                });
+            }
+            const form = document.getElementById(`${prefix}-panel`);
+            form.addEventListener('input', updateLabelButtons);
+            form.addEventListener('reset', () => queueMicrotask(updateLabelButtons));
+        }
+
+        function updateLabelButtons() {
+            for (const prefix of ['event', 'task']) {
+                for (const field of Object.keys(labelSuggestions)) {
+                    const value = document.getElementById(`${prefix}-${field}`).value.trim();
+                    document.querySelectorAll(`#${prefix}-${field}-options button`).forEach(button => {
+                        button.setAttribute('aria-pressed', String(button.textContent === value));
+                    });
+                }
+            }
+        }
+
+        function readLabels(prefix) {
+            const subject = document.getElementById(`${prefix}-subject`).value.trim();
+            const typeLabel = document.getElementById(`${prefix}-type-label`).value.trim();
+            return { ...(subject ? { subject } : {}), ...(typeLabel ? { typeLabel } : {}) };
+        }
+
         function setSaveStatus(state, message) {
             saveStatus.dataset.state = state;
             saveStatus.textContent = message;
@@ -967,7 +1078,7 @@
             submitEvent.disabled = busy || storageError;
             submitTask.disabled = busy || storageError;
             document.getElementById('cancel-edit').disabled = busy;
-            document.querySelectorAll('.delete-block, .edit-block').forEach(button => {
+            document.querySelectorAll('.delete-block, .edit-block, .label-options button').forEach(button => {
                 button.disabled = busy || storageError;
             });
             taskOptions.querySelectorAll('button').forEach(button => {
@@ -1013,6 +1124,8 @@
             if (!event || typeof event.title !== 'string' || !event.title.trim()
                 || !validDate(event.date)
                 || typeof event.repeat !== 'boolean') return false;
+            if (!['subject', 'typeLabel'].every(key => event[key] === undefined
+                || (typeof event[key] === 'string' && event[key].length <= 100))) return false;
             if (event.excludedDates !== undefined && (!event.repeat
                 || !Array.isArray(event.excludedDates)
                 || new Set(event.excludedDates).size !== event.excludedDates.length
@@ -1133,7 +1246,7 @@
         }
 
         function sameEvent(first, second) {
-            return ['title', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes', 'maxBlockMinutes']
+            return ['title', 'subject', 'typeLabel', 'date', 'start', 'end', 'repeat', 'type', 'taskId', 'priority', 'deadline', 'minBlockMinutes', 'maxBlockMinutes']
                 .every(key => first[key] === second[key])
                 && JSON.stringify([...(first.excludedDates || [])].sort()) === JSON.stringify([...(second.excludedDates || [])].sort());
         }
@@ -1228,13 +1341,22 @@
                         block.classList.add('time-slot', item.type);
                         block.dataset.start = toMinutes(item.start);
                         block.dataset.end = toMinutes(item.end);
-                        block.title = `${item.title}: ${item.start} - ${item.end}${item.description ? ` (${item.description})` : ''}`;
+                        const labelText = [item.subject, item.typeLabel].filter(Boolean).join(' / ');
+                        block.title = `${item.title}: ${item.start} - ${item.end}${labelText ? ` - ${labelText}` : ''}${item.description ? ` (${item.description})` : ''}`;
                         const time = document.createElement('span');
                         time.className = 'slot-time';
                         time.textContent = `${item.start} – ${item.end}`;
                         const title = document.createElement('div');
                         title.className = 'slot-title';
                         title.textContent = item.title;
+                        const labels = document.createElement('div');
+                        labels.className = 'slot-labels';
+                        [item.subject, item.typeLabel].filter(Boolean).forEach(label => {
+                            const badge = document.createElement('span');
+                            badge.className = 'slot-label';
+                            badge.textContent = label;
+                            labels.append(badge);
+                        });
                         const description = document.createElement('div');
                         description.className = 'slot-description';
                         description.textContent = item.description;
@@ -1250,8 +1372,10 @@
                         edit.type = 'button';
                         edit.className = 'edit-block';
                         edit.disabled = busy || storageError;
-                        edit.setAttribute('aria-label', `Edit ${item.title}, ${item.occurrenceDate}, ${item.start} - ${item.end}`);
-                        edit.append(time, title, description);
+                        edit.setAttribute('aria-label', `Edit ${item.title}, ${item.occurrenceDate}, ${item.start} - ${item.end}${labelText ? `, ${labelText}` : ''}`);
+                        edit.append(time, title);
+                        if (labels.childElementCount) edit.append(labels);
+                        edit.append(description);
                         edit.addEventListener('click', () => editBlock(item.id, item.occurrenceDate));
                         block.addEventListener('click', event => {
                             if (!event.target.closest('button')) editBlock(item.id, item.occurrenceDate);
@@ -1314,6 +1438,10 @@
                 occurrenceDate, occurrenceOnly: original.repeat && scope === 'one',
                 wholeTask: original.type === 'task' && scope === 'all', revision
             };
+            const prefix = original.type === 'task' ? 'task' : 'event';
+            document.getElementById(`${prefix}-subject`).value = original.subject || '';
+            document.getElementById(`${prefix}-type-label`).value = original.typeLabel || '';
+            updateLabelButtons();
             document.getElementById('cancel-edit').hidden = false;
             if (original.type === 'task') {
                 activateTab(document.getElementById('task-tab'));
@@ -1515,6 +1643,7 @@
             const entry = {
                 id: crypto.randomUUID(),
                 title: document.getElementById('event-title').value.trim(),
+                ...readLabels('event'),
                 date: document.getElementById('event-date').value,
                 start: document.getElementById('event-time').value,
                 end: document.getElementById('event-end').value,
@@ -1762,6 +1891,7 @@
             taskOptions.replaceChildren();
             const now = new Date();
             const title = document.getElementById('task-title').value.trim();
+            const labels = readLabels('task');
             const deadline = document.getElementById('task-deadline').value;
             const totalMinutes = Number(document.getElementById('task-duration').value) * 60;
             const split = document.getElementById('task-flexible').checked;
@@ -1800,7 +1930,7 @@
                     const revision = session;
                     const taskId = context && !context.wholeTask ? context.originals[0].taskId : crypto.randomUUID();
                     const entries = blocks.map(block => ({
-                        ...block, id: crypto.randomUUID(), type: 'task', taskId, title, repeat: false,
+                        ...block, id: crypto.randomUUID(), type: 'task', taskId, title, ...labels, repeat: false,
                         deadline, priority, minBlockMinutes: minimum, maxBlockMinutes: maximum
                     }));
                     const added = context ? await updateEntries(entries, taskStatus, context) : await saveEntries(entries, taskStatus);
